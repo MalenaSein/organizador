@@ -13,7 +13,7 @@
     --bg:#0f0f13;--bg2:#17171f;--bg3:#1e1e28;
     --border:rgba(255,255,255,0.07);
     --text:#f0f0f5;--text2:#8888aa;--text3:#555570;
-    --accent:#7c6af7;--accent2:#a89cf8;--accent-glow:rgba(124,106,247,0.3);
+    --accent:#7c6af7;--accent-glow:rgba(124,106,247,0.3);
     --green:#4ade80;--orange:#fb923c;--red:#f87171;--yellow:#facc15;--pink:#f472b6;--cyan:#22d3ee;
     --radius:16px;--radius-sm:10px;--shadow:0 4px 24px rgba(0,0,0,0.4);
     --font:'Outfit',sans-serif;--mono:'Space Mono',monospace;
@@ -93,8 +93,8 @@
 
   /* ── SPLASH ── */
   .splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:var(--bg);z-index:10000;}
-  .splash-logo{font-size:64px;font-weight:800;color:var(--accent);letter-spacing:-4px;animation:pulse 1.5s ease infinite;}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+  .splash-logo{font-size:64px;font-weight:800;color:var(--accent);letter-spacing:-4px;}
+  .splash-sub{color:var(--text3);font-size:14px;}
 
   /* ── CALENDAR ── */
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
@@ -140,7 +140,6 @@
   .modal{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.5);animation:slideUp 0.2s ease;}
   .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
   .modal-title{font-size:18px;font-weight:700;}
-  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
 
   /* ── TABS ── */
@@ -148,20 +147,17 @@
   .tab{flex:1;padding:8px 16px;border-radius:9px;border:none;background:none;color:var(--text2);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition);text-align:center;}
   .tab.active{background:var(--bg2);color:var(--text);box-shadow:var(--shadow);}
 
-  /* ── SUBJECT CHIP ── */
   .subject-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;border:1px solid var(--border);}
 
   /* ── TOAST ── */
   .toast{position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 20px;box-shadow:var(--shadow);font-size:14px;font-weight:500;animation:slideUp 0.2s ease;display:flex;align-items:center;gap:10px;max-width:320px;}
 
-  /* ── SCROLLBAR ── */
   ::-webkit-scrollbar{width:4px;height:4px;}
   ::-webkit-scrollbar-track{background:transparent;}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 
-  /* ── RESPONSIVE ── */
   @media(max-width:768px){
-    .nav{width:100%;height:64px;flex-direction:row;top:auto;bottom:0;padding:0 8px;border-right:none;border-top:1px solid var(--border);}
+    .nav{width:100%;height:64px;flex-direction:row;top:auto;bottom:0;padding:0 4px;border-right:none;border-top:1px solid var(--border);}
     .nav-logo{display:none;}
     .main{margin-left:0;margin-bottom:64px;padding:16px;}
     .grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}
@@ -173,7 +169,6 @@
     .grid-3{grid-template-columns:1fr 1fr;}
   }
 
-  /* ── UTILS ── */
   .flex{display:flex;}.flex-col{flex-direction:column;}.items-center{align-items:center;}
   .justify-between{justify-content:space-between;}.gap-2{gap:8px;}.gap-3{gap:12px;}
   .w-full{width:100%;}.text-sm{font-size:13px;}.text-xs{font-size:11px;}
@@ -184,63 +179,71 @@
 </head>
 <body>
 <div id="root"></div>
+
+<!-- React -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script>
-const { useState, useEffect, useCallback, useRef } = React;
 
-// ─── STORAGE DB ──────────────────────────────────────────────────────────────
-// Multi-user backend usando window.storage persistente
-const DB = {
-  async getUsers() {
-    try { const r = await window.storage.get('orbi:users', true); return r ? JSON.parse(r.value) : {}; }
-    catch { return {}; }
-  },
-  async saveUsers(u) {
-    try { await window.storage.set('orbi:users', JSON.stringify(u), true); } catch(e){console.error('saveUsers',e);}
-  },
-  async register(username, password, displayName) {
-    const users = await this.getUsers();
-    const key = username.toLowerCase().trim();
-    if (!key) throw new Error('El usuario no puede estar vacío');
-    if (users[key]) throw new Error('Ese usuario ya existe');
-    if (password.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres');
-    const hash = btoa(encodeURIComponent(password + ':orbi2025:' + key));
-    users[key] = { username: key, displayName: displayName.trim(), hash, createdAt: Date.now() };
-    await this.saveUsers(users);
-    return users[key];
-  },
-  async login(username, password) {
-    const users = await this.getUsers();
-    const key = username.toLowerCase().trim();
-    const u = users[key];
-    if (!u) throw new Error('Usuario no encontrado');
-    const hash = btoa(encodeURIComponent(password + ':orbi2025:' + key));
-    if (u.hash !== hash) throw new Error('Contraseña incorrecta');
-    return u;
-  },
-  async getUserData(username) {
-    try { const r = await window.storage.get('orbi:data:' + username, false); return r ? JSON.parse(r.value) : null; }
-    catch { return null; }
-  },
-  async saveUserData(username, data) {
-    try { await window.storage.set('orbi:data:' + username, JSON.stringify(data), false); }
-    catch(e) { console.error('saveUserData', e); }
-  },
+<!-- Firebase v10 (módulos via CDN compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+// ─── FIREBASE CONFIG ─────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyB3ghd87bGn-Ovl4dTTqod4C3OK4PIc0fs",
+  authDomain: "organizador-42dc3.firebaseapp.com",
+  projectId: "organizador-42dc3",
+  storageBucket: "organizador-42dc3.firebasestorage.app",
+  messagingSenderId: "615484579948",
+  appId: "1:615484579948:web:024befa3447c4af3d2f849"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// Helper: guardar datos del usuario en Firestore
+const saveData = (uid, data) =>
+  db.collection('users').doc(uid).set(data);
+
+// Helper: leer datos del usuario
+const loadData = async (uid) => {
+  const snap = await db.collection('users').doc(uid).get();
+  return snap.exists ? snap.data() : null;
 };
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
-const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const { useState, useEffect, useCallback, useRef } = React;
+
+const DAYS   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const COLORS = ['#7c6af7','#22d3ee','#4ade80','#fb923c','#f472b6','#facc15','#f87171','#a78bfa'];
-const p2 = n => String(n).padStart(2,'0');
-const fmtDate = d => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+
+const p2      = n  => String(n).padStart(2,'0');
+const fmtDate = d  => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
 const sameDay = (a,b) => fmtDate(new Date(a)) === fmtDate(new Date(b));
 const todayStr = () => fmtDate(new Date());
 
-const BLANK_DATA = () => ({
-  theme:'dark', subjects:[], activities:[], tasks:[], habits:[], events:[], notes:[],
+const BLANK = () => ({
+  theme:'dark', subjects:[], activities:[], tasks:[], habits:[], events:[], notes:[]
 });
+
+// Traduce errores de Firebase al español
+const firebaseError = (code) => {
+  const map = {
+    'auth/email-already-in-use':   'Ese email ya tiene una cuenta registrada.',
+    'auth/invalid-email':          'El email no tiene un formato válido.',
+    'auth/weak-password':          'La contraseña debe tener al menos 6 caracteres.',
+    'auth/user-not-found':         'No existe una cuenta con ese email.',
+    'auth/wrong-password':         'Contraseña incorrecta.',
+    'auth/invalid-credential':     'Email o contraseña incorrectos.',
+    'auth/too-many-requests':      'Demasiados intentos. Esperá unos minutos.',
+    'auth/network-request-failed': 'Sin conexión. Revisá tu internet.',
+  };
+  return map[code] || 'Ocurrió un error. Intentá de nuevo.';
+};
 
 // ─── ICONS ───────────────────────────────────────────────────────────────────
 const IP = {
@@ -260,60 +263,71 @@ const IP = {
   logout:'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9',
   chevR:'M9 18l6-6-6-6', chevL:'M15 18l-6-6 6-6',
   user:'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z',
-  lock:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
 };
-const Icon = ({name,size=18}) => React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'},
-  ...(IP[name]||'').split('M').filter(Boolean).map((p,i)=>React.createElement('path',{key:i,d:'M'+p}))
-);
+const Icon = ({name,size=18}) =>
+  React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'},
+    ...(IP[name]||'').split('M').filter(Boolean).map((p,i)=>React.createElement('path',{key:i,d:'M'+p}))
+  );
 
-// ─── SHARED COMPONENTS ───────────────────────────────────────────────────────
+// ─── SHARED UI ───────────────────────────────────────────────────────────────
 const Modal = ({title,onClose,children}) =>
   React.createElement('div',{className:'overlay',onClick:e=>e.target.className==='overlay'&&onClose()},
     React.createElement('div',{className:'modal'},
       React.createElement('div',{className:'modal-header'},
         React.createElement('div',{className:'modal-title'},title),
         React.createElement('button',{className:'btn btn-ghost btn-icon',onClick:onClose},React.createElement(Icon,{name:'x',size:16}))
-      ), children
+      ),children
     )
   );
 
 function Toast({msg,type='success',onDone}) {
   useEffect(()=>{const t=setTimeout(onDone,3200);return()=>clearTimeout(t);},[]);
-  const e = type==='error'?'❌':type==='info'?'ℹ️':'✅';
+  const e=type==='error'?'❌':type==='info'?'ℹ️':'✅';
   return React.createElement('div',{className:'toast'},e,' ',msg);
 }
 
 const ColorPicker = ({value,onChange}) =>
   React.createElement('div',{className:'flex gap-2',style:{flexWrap:'wrap'}},
-    COLORS.map(c=>React.createElement('div',{key:c,onClick:()=>onChange(c),style:{width:28,height:28,borderRadius:'50%',background:c,cursor:'pointer',border:value===c?'3px solid white':'3px solid transparent',transition:'border 0.15s'}}))
+    COLORS.map(c=>React.createElement('div',{key:c,onClick:()=>onChange(c),
+      style:{width:28,height:28,borderRadius:'50%',background:c,cursor:'pointer',
+             border:value===c?'3px solid white':'3px solid transparent',transition:'border 0.15s'}}))
   );
 
 const DayToggle = ({options,value,onChange}) =>
   React.createElement('div',{className:'flex gap-2',style:{flexWrap:'wrap'}},
-    options.map(d=>React.createElement('button',{key:d,className:`btn btn-sm ${value.includes(d)?'btn-primary':'btn-ghost'}`,onClick:()=>onChange(value.includes(d)?value.filter(x=>x!==d):[...value,d])},d))
+    options.map(d=>React.createElement('button',{key:d,
+      className:`btn btn-sm ${value.includes(d)?'btn-primary':'btn-ghost'}`,
+      onClick:()=>onChange(value.includes(d)?value.filter(x=>x!==d):[...value,d])},d))
   );
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage({onAuth}) {
-  const [tab,setTab] = useState('login');
-  const [form,setForm] = useState({username:'',password:'',displayName:''});
-  const [error,setError] = useState('');
+  const [tab,setTab]   = useState('login');
+  const [form,setForm] = useState({email:'',password:'',name:''});
+  const [error,setError]   = useState('');
   const [loading,setLoading] = useState(false);
 
   const handle = async () => {
     setError(''); setLoading(true);
     try {
-      const u = tab==='login'
-        ? await DB.login(form.username, form.password)
-        : await DB.register(form.username, form.password, form.displayName||form.username);
-      onAuth(u);
-    } catch(e) { setError(e.message); }
+      let cred;
+      if(tab==='login') {
+        cred = await auth.signInWithEmailAndPassword(form.email, form.password);
+      } else {
+        if(!form.name.trim()){ setError('Ingresá tu nombre.'); setLoading(false); return; }
+        cred = await auth.createUserWithEmailAndPassword(form.email, form.password);
+        await cred.user.updateProfile({ displayName: form.name.trim() });
+      }
+      onAuth(cred.user);
+    } catch(e) {
+      setError(firebaseError(e.code));
+    }
     setLoading(false);
   };
 
-  const f = (k) => (e) => setForm(p=>({...p,[k]:e.target.value}));
-  const onKey = e => e.key==='Enter' && handle();
-  const canSubmit = form.username.trim() && form.password.trim() && !loading;
+  const F  = k => e => setForm(p=>({...p,[k]:e.target.value}));
+  const ok = e => e.key==='Enter' && handle();
+  const can = form.email.trim() && form.password.trim() && !loading;
 
   return React.createElement('div',{className:'auth-page'},
     React.createElement('div',{className:'auth-glow',style:{top:'-200px',left:'-200px'}}),
@@ -332,20 +346,24 @@ function AuthPage({onAuth}) {
       React.createElement('div',{className:'flex flex-col gap-3'},
         tab==='register' && React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'Nombre completo'),
-          React.createElement('input',{className:'input',placeholder:'Tu nombre',value:form.displayName,onChange:f('displayName'),onKeyDown:onKey})
+          React.createElement('input',{className:'input',placeholder:'Tu nombre',value:form.name,onChange:F('name'),onKeyDown:ok})
         ),
         React.createElement('div',{className:'form-group'},
-          React.createElement('label',{className:'label'},'Usuario'),
-          React.createElement('input',{className:'input',placeholder:'nombre.apellido',value:form.username,onChange:f('username'),onKeyDown:onKey,autoCapitalize:'none',autoComplete:'username'})
+          React.createElement('label',{className:'label'},'Email'),
+          React.createElement('input',{className:'input',type:'email',placeholder:'tu@email.com',value:form.email,onChange:F('email'),onKeyDown:ok,autoComplete:'email'})
         ),
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'Contraseña'+(tab==='register'?' (mín. 6 caracteres)':'')),
-          React.createElement('input',{className:'input',type:'password',placeholder:'••••••••',value:form.password,onChange:f('password'),onKeyDown:onKey,autoComplete:tab==='login'?'current-password':'new-password'})
+          React.createElement('input',{className:'input',type:'password',placeholder:'••••••••',value:form.password,onChange:F('password'),onKeyDown:ok,autoComplete:tab==='login'?'current-password':'new-password'})
         ),
         React.createElement('button',{
-          className:'btn btn-primary w-full',style:{justifyContent:'center',marginTop:8},
-          onClick:handle,disabled:!canSubmit
-        }, loading ? React.createElement('div',{className:'spinner',style:{width:20,height:20,borderWidth:2}}) : (tab==='login'?'Entrar →':'Crear cuenta →'))
+          className:'btn btn-primary w-full',
+          style:{justifyContent:'center',marginTop:8},
+          onClick:handle,disabled:!can
+        }, loading
+          ? React.createElement('div',{className:'spinner',style:{width:20,height:20,borderWidth:2}})
+          : (tab==='login'?'Entrar →':'Crear cuenta →')
+        )
       ),
 
       React.createElement('div',{style:{textAlign:'center',marginTop:20,fontSize:12,color:'var(--text3)'}},
@@ -354,9 +372,8 @@ function AuthPage({onAuth}) {
           : React.createElement('span',null,'¿Ya tenés cuenta? ',React.createElement('span',{style:{color:'var(--accent)',cursor:'pointer',fontWeight:600},onClick:()=>{setTab('login');setError('');}}, 'Iniciá sesión'))
       ),
 
-      React.createElement('div',{style:{marginTop:20,padding:12,background:'var(--bg3)',borderRadius:10,fontSize:11,color:'var(--text3)',textAlign:'center'}},
-        React.createElement(Icon,{name:'lock',size:12}),
-        ' Datos privados. Solo vos podés ver tu información.'
+      React.createElement('div',{style:{marginTop:20,padding:12,background:'var(--bg3)',borderRadius:10,fontSize:11,color:'var(--text3)',textAlign:'center',lineHeight:1.5}},
+        '🔒 Autenticación segura con Firebase · Datos privados por usuario'
       )
     )
   );
@@ -364,15 +381,16 @@ function AuthPage({onAuth}) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({state,setPage,user}) {
-  const now = new Date();
-  const todayEvs = state.events.filter(e=>sameDay(e.date,now));
-  const doneT = state.tasks.filter(t=>t.status==='completada').length;
-  const pendT = state.tasks.filter(t=>t.status!=='completada').length;
-  const habPct = Math.round(state.habits.reduce((a,h)=>a+Math.min(h.done.length,7),0)/Math.max(state.habits.length*7,1)*100);
-  const name = (user.displayName||'').split(' ')[0];
-  const greet = () => { const h=now.getHours(); return h<12?`Buenos días, ${name} ☀️`:h<19?`Buenas tardes, ${name} 🌤️`:`Buenas noches, ${name} 🌙`; };
+  const now     = new Date();
+  const todayEvs= state.events.filter(e=>sameDay(e.date,now));
+  const doneT   = state.tasks.filter(t=>t.status==='completada').length;
+  const pendT   = state.tasks.filter(t=>t.status!=='completada').length;
+  const habPct  = Math.round(state.habits.reduce((a,h)=>a+Math.min(h.done.length,7),0)/Math.max(state.habits.length*7,1)*100);
+  const name    = (user.displayName||user.email||'').split(' ')[0].split('@')[0];
+  const h       = now.getHours();
+  const greet   = h<12?`Buenos días, ${name} ☀️`:h<19?`Buenas tardes, ${name} 🌤️`:`Buenas noches, ${name} 🌙`;
 
-  const SC = (label,value,sub,color) => React.createElement('div',{className:'stat-card'},
+  const SC=(label,value,sub,color)=>React.createElement('div',{className:'stat-card'},
     React.createElement('div',{className:'stat-num',style:{color}},value),
     React.createElement('div',{className:'stat-label'},label),
     React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},sub)
@@ -381,7 +399,7 @@ function Dashboard({state,setPage,user}) {
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},
       React.createElement('div',null,
-        React.createElement('div',{className:'text-sm text-muted'},greet()),
+        React.createElement('div',{className:'text-sm text-muted'},greet),
         React.createElement('h1',{className:'page-title'},'Mi ',React.createElement('span',null,'Panel'))
       ),
       React.createElement('button',{className:'btn btn-primary',onClick:()=>setPage('calendar')},React.createElement(Icon,{name:'plus',size:16}),'Nuevo Evento')
@@ -417,7 +435,7 @@ function Dashboard({state,setPage,user}) {
           )
         ),
         state.tasks.filter(t=>t.priority==='alta'&&t.status!=='completada').length===0&&
-          React.createElement('p',{className:'text-sm text-muted'},'Sin urgentes. ¡Todo bajo control! ✅')
+          React.createElement('p',{className:'text-sm text-muted'},'Sin urgentes ✅')
       )
     ),
     React.createElement('div',{className:'grid-2',style:{gap:20}},
@@ -427,7 +445,7 @@ function Dashboard({state,setPage,user}) {
           ? React.createElement('p',{className:'text-sm text-muted',style:{cursor:'pointer',color:'var(--accent)'},onClick:()=>setPage('faculty')},'+ Agregar materias')
           : React.createElement('div',{className:'flex',style:{flexWrap:'wrap',gap:8}},
               state.subjects.map(s=>React.createElement('div',{key:s.id,className:'subject-chip',style:{borderColor:s.color+'44',color:s.color}},
-                React.createElement('div',{style:{width:6,height:6,borderRadius:'50%',background:s.color}}), s.name
+                React.createElement('div',{style:{width:6,height:6,borderRadius:'50%',background:s.color}}),s.name
               ))
             )
       ),
@@ -452,17 +470,18 @@ function Dashboard({state,setPage,user}) {
   );
 }
 
-// ─── CALENDAR ─────────────────────────────────────────────────────────────────
+// ─── CALENDAR ────────────────────────────────────────────────────────────────
 function Calendar({state,setState,showToast}) {
   const [view,setView]=useState('month');
   const [curr,setCurr]=useState(new Date());
   const [modal,setModal]=useState(false);
   const [editEv,setEditEv]=useState(null);
-  const [form,setForm]=useState({title:'',category:'facultad',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr()});
+  const blank={title:'',category:'facultad',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr()};
+  const [form,setForm]=useState(blank);
 
   const nav=dir=>{const d=new Date(curr);if(view==='month')d.setMonth(d.getMonth()+dir);else if(view==='week')d.setDate(d.getDate()+dir*7);else d.setDate(d.getDate()+dir);setCurr(d);};
   const lbl=()=>{if(view==='month')return `${MONTHS[curr.getMonth()]} ${curr.getFullYear()}`;if(view==='week'){const s=new Date(curr);s.setDate(s.getDate()-s.getDay());const e=new Date(s);e.setDate(e.getDate()+6);return `${s.getDate()} - ${e.getDate()} ${MONTHS[s.getMonth()]}`;}return `${curr.getDate()} de ${MONTHS[curr.getMonth()]}`;};
-  const openNew=date=>{setEditEv(null);setForm({title:'',category:'facultad',start:'09:00',end:'10:00',color:'#7c6af7',date:date||todayStr()});setModal(true);};
+  const openNew=date=>{setEditEv(null);setForm({...blank,date:date||todayStr()});setModal(true);};
   const openEdit=ev=>{setEditEv(ev);setForm({...ev});setModal(true);};
   const save=()=>{
     if(!form.title.trim()) return;
@@ -471,7 +490,7 @@ function Calendar({state,setState,showToast}) {
     setModal(false);showToast(editEv?'Evento actualizado':'Evento creado');
   };
   const del=id=>{setState(s=>({...s,events:s.events.filter(e=>e.id!==id)}));setModal(false);showToast('Evento eliminado');};
-  const F=(k)=>e=>setForm(f=>({...f,[k]:e.target.value}));
+  const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
 
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},
@@ -479,13 +498,13 @@ function Calendar({state,setState,showToast}) {
       React.createElement('button',{className:'btn btn-primary',onClick:()=>openNew()},React.createElement(Icon,{name:'plus',size:16}),'Agregar')
     ),
     React.createElement('div',{className:'card'},
-      React.createElement('div',{className:'flex items-center gap-3',style:{marginBottom:20,flexWrap:'wrap',gap:12}},
+      React.createElement('div',{className:'flex items-center',style:{marginBottom:20,flexWrap:'wrap',gap:12}},
         React.createElement('div',{className:'tabs',style:{maxWidth:260}},
           [['month','Mes'],['week','Semana'],['day','Día']].map(([v,l])=>React.createElement('button',{key:v,className:`tab${view===v?' active':''}`,onClick:()=>setView(v)},l))
         ),
         React.createElement('div',{className:'flex items-center gap-2',style:{marginLeft:'auto'}},
           React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',onClick:()=>nav(-1)},React.createElement(Icon,{name:'chevL',size:16})),
-          React.createElement('span',{style:{fontWeight:700,minWidth:180,textAlign:'center',fontSize:15}},lbl()),
+          React.createElement('span',{style:{fontWeight:700,minWidth:180,textAlign:'center',fontSize:14}},lbl()),
           React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',onClick:()=>nav(1)},React.createElement(Icon,{name:'chevR',size:16})),
           React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setCurr(new Date())},'Hoy')
         )
@@ -496,7 +515,7 @@ function Calendar({state,setState,showToast}) {
     ),
     modal&&React.createElement(Modal,{title:editEv?'Editar Evento':'Nuevo Evento',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título'),React.createElement('input',{className:'input',value:form.title,placeholder:'Ej: Parcial de Cálculo',onChange:F('title')})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título'),React.createElement('input',{className:'input',value:form.title,placeholder:'Ej: Parcial Cálculo',onChange:F('title')})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Categoría'),React.createElement('select',{className:'input select',value:form.category,onChange:F('category')},['facultad','extracurricular','personal','hogar'].map(c=>React.createElement('option',{key:c,value:c},c)))),
         React.createElement('div',{className:'grid-2',style:{gap:12}},
           React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Inicio'),React.createElement('input',{className:'input',type:'time',value:form.start,onChange:F('start')})),
@@ -578,7 +597,6 @@ function DayView({curr,events,onEvent}) {
 function Faculty({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [form,setForm]=useState({name:'',color:COLORS[0],days:[],time:'',room:''});
-  const DOPTS=['Lun','Mar','Mié','Jue','Vie','Sáb'];
   const save=()=>{
     if(!form.name.trim()) return;
     setState(s=>({...s,subjects:[...s.subjects,{...form,id:Date.now()}]}));
@@ -596,7 +614,7 @@ function Faculty({state,setState,showToast}) {
         React.createElement('div',{className:'flex justify-between items-center'},
           React.createElement('div',null,
             React.createElement('div',{style:{fontSize:16,fontWeight:700,color:s.color}},s.name),
-            React.createElement('div',{className:'text-sm text-muted',style:{marginTop:4}},s.days.join(', ')||(s.days.length?s.days.join(', '):'Sin días'),' • ',s.time||'Sin horario'),
+            React.createElement('div',{className:'text-sm text-muted',style:{marginTop:4}},(s.days||[]).join(', ')||'Sin días',' • ',s.time||'Sin horario'),
             s.room&&React.createElement('div',{className:'text-xs text-muted',style:{marginTop:2}},'📍 ',s.room)
           ),
           React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(s.id)},React.createElement(Icon,{name:'trash',size:14}))
@@ -606,7 +624,7 @@ function Faculty({state,setState,showToast}) {
     modal&&React.createElement(Modal,{title:'Nueva Materia',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Cálculo II',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Días'),React.createElement(DayToggle,{options:DOPTS,value:form.days,onChange:v=>setForm(f=>({...f,days:v}))})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Días'),React.createElement(DayToggle,{options:['Lun','Mar','Mié','Jue','Vie','Sáb'],value:form.days,onChange:v=>setForm(f=>({...f,days:v}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Horario'),React.createElement('input',{className:'input',placeholder:'08:00-10:00',value:form.time,onChange:e=>setForm(f=>({...f,time:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Aula / Modalidad'),React.createElement('input',{className:'input',placeholder:'Aula 12 / Virtual',value:form.room,onChange:e=>setForm(f=>({...f,room:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
@@ -621,7 +639,6 @@ function Activities({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [form,setForm]=useState({name:'',icon:'🎯',color:COLORS[2],days:[],time:''});
   const ICONS=['🏋️','🏃','🧘','📚','🎸','🎨','⚽','🏊','🚴','🎮','🍳','✍️'];
-  const DOPTS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const save=()=>{
     if(!form.name.trim()) return;
     setState(s=>({...s,activities:[...s.activities,{...form,id:Date.now()}]}));
@@ -633,14 +650,14 @@ function Activities({state,setState,showToast}) {
       React.createElement('h1',{className:'page-title'},'🏃 ',React.createElement('span',null,'Actividades')),
       React.createElement('button',{className:'btn btn-primary',onClick:()=>setModal(true)},React.createElement(Icon,{name:'plus',size:16}),'Actividad')
     ),
-    state.activities.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Agregá tus actividades extracurriculares: gym, cursos, hobbies...'),
+    state.activities.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Gym, cursos, hobbies... agregá tus actividades extracurriculares.'),
     React.createElement('div',{className:'grid-3'},
       state.activities.map(a=>React.createElement('div',{key:a.id,className:'card',style:{borderTop:`3px solid ${a.color}`}},
         React.createElement('div',{className:'flex justify-between'},
           React.createElement('div',null,
             React.createElement('div',{style:{fontSize:28,marginBottom:8}},a.icon),
             React.createElement('div',{style:{fontSize:15,fontWeight:700}},a.name),
-            React.createElement('div',{className:'text-xs text-muted',style:{marginTop:4}},a.days.join(', ')||'Sin días'),
+            React.createElement('div',{className:'text-xs text-muted',style:{marginTop:4}},(a.days||[]).join(', ')||'Sin días'),
             React.createElement('div',{className:'text-xs text-muted'},a.time||'Sin horario')
           ),
           React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(a.id)},React.createElement(Icon,{name:'trash',size:14}))
@@ -651,7 +668,7 @@ function Activities({state,setState,showToast}) {
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Ícono'),React.createElement('div',{className:'flex gap-2',style:{flexWrap:'wrap'}},ICONS.map(ic=>React.createElement('button',{key:ic,className:`btn btn-sm ${form.icon===ic?'btn-primary':'btn-ghost'}`,onClick:()=>setForm(f=>({...f,icon:ic}))},ic)))),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Gym',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Días'),React.createElement(DayToggle,{options:DOPTS,value:form.days,onChange:v=>setForm(f=>({...f,days:v}))})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Días'),React.createElement(DayToggle,{options:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],value:form.days,onChange:v=>setForm(f=>({...f,days:v}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Horario'),React.createElement('input',{className:'input',placeholder:'07:00-08:00',value:form.time,onChange:e=>setForm(f=>({...f,time:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
         React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center'},onClick:save},'Guardar')
@@ -660,7 +677,7 @@ function Activities({state,setState,showToast}) {
   );
 }
 
-// ─── TASKS ────────────────────────────────────────────────────────────────────
+// ─── TASKS ───────────────────────────────────────────────────────────────────
 function Tasks({state,setState,showToast}) {
   const [filter,setFilter]=useState('all');
   const [modal,setModal]=useState(false);
@@ -670,7 +687,7 @@ function Tasks({state,setState,showToast}) {
     if(filter==='all') return true;
     if(['pendiente','en-progreso','completada'].includes(filter)) return t.status===filter;
     return t.type===filter;
-  }).sort((a,b)=>{const po={alta:0,media:1,baja:2};return (po[a.priority]||1)-(po[b.priority]||1);});
+  }).sort((a,b)=>({alta:0,media:1,baja:2}[a.priority]||1)-({alta:0,media:1,baja:2}[b.priority]||1));
   const toggle=id=>setState(s=>({...s,tasks:s.tasks.map(t=>t.id===id?{...t,status:t.status==='completada'?'pendiente':'completada'}:t)}));
   const save=()=>{
     if(!form.title.trim()) return;
@@ -687,7 +704,7 @@ function Tasks({state,setState,showToast}) {
       [['all','Todas'],['pendiente','Pendientes'],['en-progreso','En Progreso'],['completada','Completadas'],['facultad','Facultad'],['hogar','Hogar'],['personal','Personal']]
       .map(([v,l])=>React.createElement('button',{key:v,className:`btn btn-sm ${filter===v?'btn-primary':'btn-ghost'}`,onClick:()=>setFilter(v)},l))
     ),
-    filtered.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'No hay tareas en esta categoría'),
+    filtered.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'No hay tareas en esta categoría.'),
     filtered.map(t=>React.createElement('div',{key:t.id,className:`task-item${t.status==='completada'?' done':''}`,style:{cursor:'default'}},
       React.createElement('div',{className:`task-check${t.status==='completada'?' checked':''}`,onClick:()=>toggle(t.id)},t.status==='completada'&&React.createElement('span',{style:{color:'white',fontSize:12}},'✓')),
       React.createElement('div',{className:'task-title'},t.title),
@@ -747,7 +764,7 @@ function Habits({state,setState,showToast}) {
     ),
     React.createElement('div',{className:'card',style:{marginBottom:20}},
       React.createElement('div',{className:'card-title'},'Progreso Semanal'),
-      React.createElement('div',{className:'flex items-center gap-4'},
+      React.createElement('div',{className:'flex items-center gap-3'},
         React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:80}},wPct+'%'),
         React.createElement('div',{style:{flex:1}},
           React.createElement('div',{className:'progress-bar',style:{height:10}},React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})),
@@ -756,27 +773,29 @@ function Habits({state,setState,showToast}) {
       )
     ),
     React.createElement('div',{style:{display:'flex',marginBottom:12,paddingLeft:220,gap:4}},DS.map(d=>React.createElement('div',{key:d,style:{width:28,textAlign:'center',fontSize:11,color:'var(--text3)',fontWeight:700}},d))),
-    state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Todavía no tenés hábitos. ¡Empezá con uno pequeño!'),
+    state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
     state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item'},
       React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center'}},h.icon),
       React.createElement('div',{style:{minWidth:150}},
         React.createElement('div',{style:{fontSize:14,fontWeight:600}},h.name),
         React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
       ),
-      React.createElement('div',{style:{display:'flex',gap:4,flex:1}},DS.map((_,i)=>React.createElement('div',{key:i,className:`habit-dot${h.done.includes(i)?' done':''}`,onClick:()=>toggle(h.id,i)},h.done.includes(i)?'✓':''))),
+      React.createElement('div',{style:{display:'flex',gap:4,flex:1}},
+        DS.map((_,i)=>React.createElement('div',{key:i,className:`habit-dot${h.done.includes(i)?' done':''}`,onClick:()=>toggle(h.id,i)},h.done.includes(i)?'✓':''))
+      ),
       React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',marginLeft:8},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
     )),
     modal&&React.createElement(Modal,{title:'Nuevo Hábito',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Ícono'),React.createElement('div',{className:'flex gap-2',style:{flexWrap:'wrap'}},ICONS.map(ic=>React.createElement('button',{key:ic,className:`btn btn-sm ${form.icon===ic?'btn-primary':'btn-ghost'}`,onClick:()=>setForm(f=>({...f,icon:ic}))},ic)))),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre del hábito'),React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
         React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center'},onClick:save},'Guardar Hábito')
       )
     )
   );
 }
 
-// ─── STATS ────────────────────────────────────────────────────────────────────
+// ─── STATS ───────────────────────────────────────────────────────────────────
 function Stats({state}) {
   const total=state.tasks.length,done=state.tasks.filter(t=>t.status==='completada').length;
   const pct=Math.round(done/Math.max(total,1)*100);
@@ -805,10 +824,7 @@ function Stats({state}) {
         ['facultad','hogar','personal'].map(tp=>{
           const c=state.tasks.filter(t=>t.type===tp).length;
           return React.createElement('div',{key:tp,style:{marginBottom:12}},
-            React.createElement('div',{className:'flex justify-between text-sm',style:{marginBottom:4}},
-              React.createElement('span',{style:{textTransform:'capitalize'}},tp),
-              React.createElement('span',{className:'text-muted'},c,' tareas')
-            ),
+            React.createElement('div',{className:'flex justify-between text-sm',style:{marginBottom:4}},React.createElement('span',{style:{textTransform:'capitalize'}},tp),React.createElement('span',{className:'text-muted'},c,' tareas')),
             React.createElement('div',{className:'progress-bar'},React.createElement('div',{className:'progress-fill',style:{width:`${c/Math.max(total,1)*100}%`,background:'var(--accent)'}}))
           );
         })
@@ -819,10 +835,7 @@ function Stats({state}) {
           const c=state.habits.filter(h=>h.done.includes(i)).length;
           const pp=Math.round(c/Math.max(state.habits.length,1)*100);
           return React.createElement('div',{key:d,style:{marginBottom:10}},
-            React.createElement('div',{className:'flex justify-between text-sm',style:{marginBottom:4}},
-              React.createElement('span',null,d),
-              React.createElement('span',{className:'text-muted'},c,'/',state.habits.length)
-            ),
+            React.createElement('div',{className:'flex justify-between text-sm',style:{marginBottom:4}},React.createElement('span',null,d),React.createElement('span',{className:'text-muted'},c,'/',state.habits.length)),
             React.createElement('div',{className:'progress-bar'},React.createElement('div',{className:'progress-fill',style:{width:pp+'%',background:pp>70?'var(--green)':pp>40?'var(--yellow)':'var(--red)'}}))
           );
         })
@@ -839,8 +852,7 @@ function Focus({state}) {
   const timer=useRef(null);
   const total=(session==='work'?25:5)*60,elapsed=total-(mins*60+secs),pct=elapsed/total,r=90,circ=2*Math.PI*r;
   useEffect(()=>{
-    if(running){timer.current=setInterval(()=>{
-      setSecs(s=>{if(s===0){setMins(m=>{if(m===0){setRunning(false);const nx=session==='work'?'break':'work';setSession(nx);setMins(nx==='work'?25:5);if(session==='work')setCount(c=>c+1);return nx==='work'?25:5;}return m-1;});return 59;}return s-1;});},1000);}
+    if(running){timer.current=setInterval(()=>{setSecs(s=>{if(s===0){setMins(m=>{if(m===0){setRunning(false);const nx=session==='work'?'break':'work';setSession(nx);setMins(nx==='work'?25:5);if(session==='work')setCount(c=>c+1);return nx==='work'?25:5;}return m-1;});return 59;}return s-1;});},1000);}
     else clearInterval(timer.current);
     return()=>clearInterval(timer.current);
   },[running,session]);
@@ -859,7 +871,7 @@ function Focus({state}) {
           ),
           React.createElement('div',{style:{textAlign:'center'}},
             React.createElement('div',{style:{fontFamily:'var(--mono)',fontSize:42,fontWeight:700,letterSpacing:-2}},`${p2(mins)}:${p2(secs)}`),
-            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:4}},session==='work'?'Trabaja':'Descansá')
+            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:4}},session==='work'?'Trabajá':'Descansá')
           )
         ),
         React.createElement('div',{className:'flex gap-3',style:{marginTop:28}},
@@ -881,8 +893,8 @@ function Focus({state}) {
         ),
         React.createElement('div',{className:'card'},
           React.createElement('div',{className:'card-title'},'La técnica Pomodoro'),
-          ['🎯 Trabajá 25 minutos sin distracciones','☕ Descansá 5 minutos','🏅 Cada 4 sesiones, descansá 15-30 min','📵 Silenciá las notificaciones durante la sesión'].map((t,i)=>
-            React.createElement('div',{key:i,style:{fontSize:13,color:'var(--text2)',padding:'8px 0',borderBottom:'1px solid var(--border)'}},t)
+          ['🎯 Trabajá 25 minutos sin distracciones','☕ Descansá 5 minutos','🏅 Cada 4 sesiones, tomá un descanso largo','📵 Silenciá notificaciones durante la sesión'].map((t,i)=>
+            React.createElement('div',{key:i,style:{fontSize:13,color:'var(--text2)',padding:'10px 0',borderBottom:'1px solid var(--border)'}},t)
           )
         )
       )
@@ -890,11 +902,10 @@ function Focus({state}) {
   );
 }
 
-// ─── NOTES ────────────────────────────────────────────────────────────────────
+// ─── NOTES ───────────────────────────────────────────────────────────────────
 function Notes({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [form,setForm]=useState({content:'',subject:'',color:COLORS[0]});
-  const NC=['#7c6af7','#4ade80','#facc15','#f472b6','#22d3ee','#fb923c'];
   const save=()=>{
     if(!form.content.trim()) return;
     setState(s=>({...s,notes:[{...form,id:Date.now(),date:todayStr()},...s.notes]}));
@@ -908,18 +919,18 @@ function Notes({state,setState,showToast}) {
     ),
     state.notes.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Sin notas todavía. ¡Creá la primera!'),
     React.createElement('div',{className:'grid-3'},
-      state.notes.map(n=>React.createElement('div',{key:n.id,className:'card',style:{background:n.color+'18',border:`1px solid ${n.color}44`,padding:16,cursor:'default'}},
+      state.notes.map(n=>React.createElement('div',{key:n.id,className:'card',style:{background:n.color+'18',border:`1px solid ${n.color}44`,padding:16}},
         React.createElement('div',{className:'flex justify-between',style:{marginBottom:8,minHeight:20}},
           n.subject?React.createElement('span',{style:{fontSize:11,fontWeight:700,color:n.color,textTransform:'uppercase',letterSpacing:1}},n.subject):React.createElement('span'),
           React.createElement('button',{style:{background:'none',border:'none',color:'var(--text3)',cursor:'pointer',fontSize:18,lineHeight:1,padding:0},onClick:()=>del(n.id)},'×')
         ),
-        React.createElement('div',{style:{fontSize:13,lineHeight:1.6,color:'var(--text)'}},n.content),
+        React.createElement('div',{style:{fontSize:13,lineHeight:1.6}},n.content),
         React.createElement('div',{style:{marginTop:12,fontSize:11,color:'var(--text3)'}},n.date)
       ))
     ),
     modal&&React.createElement(Modal,{title:'Nueva Nota',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nota'),React.createElement('textarea',{className:'input',rows:4,placeholder:'Escribe tu nota...',value:form.content,onChange:e=>setForm(f=>({...f,content:e.target.value})),style:{resize:'vertical'}})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nota'),React.createElement('textarea',{className:'input',rows:4,placeholder:'Escribí tu nota...',value:form.content,onChange:e=>setForm(f=>({...f,content:e.target.value})),style:{resize:'vertical'}})),
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'Materia (opcional)'),
           React.createElement('select',{className:'input select',value:form.subject,onChange:e=>setForm(f=>({...f,subject:e.target.value}))},
@@ -934,53 +945,48 @@ function Notes({state,setState,showToast}) {
   );
 }
 
-// ─── PROFILE ──────────────────────────────────────────────────────────────────
+// ─── PROFILE ─────────────────────────────────────────────────────────────────
 function Profile({user,onLogout,state}) {
-  const totalTasks=state.tasks.length;
-  const doneTasks=state.tasks.filter(t=>t.status==='completada').length;
-  const habPct=Math.round(state.habits.reduce((a,h)=>a+Math.min(h.done.length,7),0)/Math.max(state.habits.length*7,1)*100);
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},React.createElement('h1',{className:'page-title'},'👤 ',React.createElement('span',null,'Mi Perfil'))),
     React.createElement('div',{className:'grid-2',style:{gap:20,alignItems:'start'}},
       React.createElement('div',{className:'card'},
         React.createElement('div',{className:'flex items-center gap-4',style:{marginBottom:24}},
           React.createElement('div',{style:{width:64,height:64,borderRadius:'50%',background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff',flexShrink:0}},
-            (user.displayName||'?')[0].toUpperCase()
+            (user.displayName||user.email||'?')[0].toUpperCase()
           ),
           React.createElement('div',null,
-            React.createElement('div',{style:{fontSize:20,fontWeight:700}},user.displayName),
-            React.createElement('div',{className:'text-sm text-muted'},'@',user.username),
-            React.createElement('div',{className:'text-xs',style:{color:'var(--green)',marginTop:4}},'● Conectado')
+            React.createElement('div',{style:{fontSize:20,fontWeight:700}},user.displayName||'Sin nombre'),
+            React.createElement('div',{className:'text-sm text-muted'},user.email),
+            React.createElement('div',{style:{fontSize:11,color:'var(--green)',marginTop:4}},'● Conectado via Firebase')
           )
         ),
         React.createElement('hr',{className:'divider'}),
-        React.createElement('p',{className:'text-sm text-muted',style:{marginBottom:20,lineHeight:1.6}},'Tus datos están guardados de forma segura y son privados. Podés acceder desde cualquier dispositivo con tu usuario y contraseña.'),
+        React.createElement('p',{className:'text-sm text-muted',style:{marginBottom:20,lineHeight:1.6}},'Tus datos se guardan automáticamente en Firebase Firestore. Podés acceder desde cualquier dispositivo.'),
         React.createElement('button',{className:'btn btn-danger',style:{justifyContent:'center'},onClick:onLogout},
           React.createElement(Icon,{name:'logout',size:16}),' Cerrar Sesión'
         )
       ),
-      React.createElement('div',{className:'flex flex-col gap-4'},
-        React.createElement('div',{className:'card'},
-          React.createElement('div',{className:'card-title'},'Resumen Personal'),
-          [
-            ['📚 Materias',state.subjects.length],
-            ['🏃 Actividades',state.activities.length],
-            ['✅ Tareas completadas',`${doneTasks}/${totalTasks}`],
-            ['💚 Hábitos activos',state.habits.length],
-            ['📝 Notas',state.notes.length],
-            ['📅 Eventos',state.events.length],
-          ].map(([l,v])=>React.createElement('div',{key:l,className:'flex justify-between',style:{padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:14}},
-            React.createElement('span',{className:'text-muted'},l),
-            React.createElement('span',{style:{fontWeight:700}},v)
-          ))
-        )
+      React.createElement('div',{className:'card'},
+        React.createElement('div',{className:'card-title'},'Resumen'),
+        [
+          ['📚 Materias',state.subjects.length],
+          ['🏃 Actividades',state.activities.length],
+          ['✅ Tareas',state.tasks.length],
+          ['💚 Hábitos',state.habits.length],
+          ['📝 Notas',state.notes.length],
+          ['📅 Eventos',state.events.length],
+        ].map(([l,v])=>React.createElement('div',{key:l,className:'flex justify-between',style:{padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:14}},
+          React.createElement('span',{className:'text-muted'},l),
+          React.createElement('span',{style:{fontWeight:700}},v)
+        ))
       )
     )
   );
 }
 
-// ─── APP ──────────────────────────────────────────────────────────────────────
-const NAV = [
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
   {id:'dashboard',label:'Panel',icon:'home'},
   {id:'calendar',label:'Calendario',icon:'calendar'},
   {id:'faculty',label:'Facultad',icon:'book'},
@@ -994,97 +1000,111 @@ const NAV = [
 ];
 
 function App() {
-  const [user,setUser]=useState(null);
-  const [data,setDataRaw]=useState(null);
-  const [page,setPage]=useState('dashboard');
-  const [toast,setToast]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [booting,setBooting]=useState(true);
-  const saveTimer=useRef(null);
+  const [user,setUser]       = useState(null);
+  const [data,setDataRaw]    = useState(null);
+  const [page,setPage]       = useState('dashboard');
+  const [toast,setToast]     = useState(null);
+  const [saving,setSaving]   = useState(false);
+  const [booting,setBooting] = useState(true);
+  const saveTimer            = useRef(null);
 
-  // Check session on load
+  // Escuchar cambios de sesión de Firebase
   useEffect(()=>{
-    const sess=sessionStorage.getItem('orbi_sess');
-    if(sess){
-      try{
-        const u=JSON.parse(sess);
-        setUser(u);
-        loadData(u.username).finally(()=>setBooting(false));
-      }catch{setBooting(false);}
-    } else setBooting(false);
+    const unsub = auth.onAuthStateChanged(async fbUser => {
+      if(fbUser) {
+        setUser(fbUser);
+        try {
+          let d = await loadData(fbUser.uid);
+          if(!d){ d=BLANK(); await saveData(fbUser.uid,d); }
+          setDataRaw(d);
+          document.body.className = d.theme==='light'?'light':'';
+        } catch(e){ console.error(e); }
+      } else {
+        setUser(null);
+        setDataRaw(null);
+      }
+      setBooting(false);
+    });
+    return ()=>unsub();
   },[]);
 
-  const loadData=async(username)=>{
-    setLoading(true);
-    try{
-      let d=await DB.getUserData(username);
-      if(!d){d=BLANK_DATA();await DB.saveUserData(username,d);}
-      setDataRaw(d);
-      document.body.className=d.theme==='light'?'light':'';
-    }catch(e){console.error(e);}
-    setLoading(false);
-  };
-
-  const handleAuth=async(u)=>{
-    setUser(u);
-    sessionStorage.setItem('orbi_sess',JSON.stringify(u));
-    await loadData(u.username);
-  };
-
-  const handleLogout=()=>{
-    sessionStorage.removeItem('orbi_sess');
-    setUser(null);setDataRaw(null);setPage('dashboard');
-    showToast('Sesión cerrada','info');
-  };
-
-  const setData=useCallback((fn)=>{
+  // setData con auto-guardado en Firestore
+  const setData = useCallback((fn)=>{
     setDataRaw(prev=>{
-      const next=typeof fn==='function'?fn(prev):fn;
-      document.body.className=next.theme==='light'?'light':'';
+      const next = typeof fn==='function' ? fn(prev) : fn;
+      document.body.className = next.theme==='light'?'light':'';
       clearTimeout(saveTimer.current);
-      saveTimer.current=setTimeout(()=>DB.saveUserData(user?.username,next).catch(console.error),600);
+      saveTimer.current = setTimeout(async()=>{
+        if(!user) return;
+        setSaving(true);
+        try { await saveData(user.uid, next); }
+        catch(e){ console.error('Error guardando:', e); }
+        setSaving(false);
+      }, 800);
       return next;
     });
   },[user]);
 
-  const showToast=(msg,type='success')=>setToast({msg,type});
-  const toggleTheme=()=>data&&setData(s=>({...s,theme:s.theme==='dark'?'light':'dark'}));
+  const showToast = (msg,type='success') => setToast({msg,type});
 
+  const handleLogout = async () => {
+    await auth.signOut();
+    showToast('Sesión cerrada','info');
+  };
+
+  const toggleTheme = () => data && setData(s=>({...s,theme:s.theme==='dark'?'light':'dark'}));
+
+  // Splash inicial
   if(booting) return React.createElement('div',{className:'splash'},
     React.createElement('div',{className:'splash-logo'},'Orbi'),
-    React.createElement('div',{className:'spinner'})
+    React.createElement('div',{className:'spinner'}),
+    React.createElement('div',{className:'splash-sub'},'Conectando con Firebase...')
   );
 
-  if(!user||!data) return React.createElement(React.Fragment,null,
-    React.createElement(AuthPage,{onAuth:handleAuth}),
+  // Auth
+  if(!user || !data) return React.createElement(React.Fragment,null,
+    React.createElement(AuthPage,{onAuth:()=>{}}),
     toast&&React.createElement(Toast,{msg:toast.msg,type:toast.type,onDone:()=>setToast(null)})
   );
 
-  const PAGES={
-    dashboard:React.createElement(Dashboard,{state:data,setPage,user}),
-    calendar:React.createElement(Calendar,{state:data,setState:setData,showToast}),
-    faculty:React.createElement(Faculty,{state:data,setState:setData,showToast}),
-    activities:React.createElement(Activities,{state:data,setState:setData,showToast}),
-    tasks:React.createElement(Tasks,{state:data,setState:setData,showToast}),
-    habits:React.createElement(Habits,{state:data,setState:setData,showToast}),
-    stats:React.createElement(Stats,{state:data}),
-    focus:React.createElement(Focus,{state:data}),
-    notes:React.createElement(Notes,{state:data,setState:setData,showToast}),
-    profile:React.createElement(Profile,{user,onLogout:handleLogout,state:data}),
+  const PAGES = {
+    dashboard:  React.createElement(Dashboard,  {state:data,setPage,user}),
+    calendar:   React.createElement(Calendar,   {state:data,setState:setData,showToast}),
+    faculty:    React.createElement(Faculty,    {state:data,setState:setData,showToast}),
+    activities: React.createElement(Activities, {state:data,setState:setData,showToast}),
+    tasks:      React.createElement(Tasks,      {state:data,setState:setData,showToast}),
+    habits:     React.createElement(Habits,     {state:data,setState:setData,showToast}),
+    stats:      React.createElement(Stats,      {state:data}),
+    focus:      React.createElement(Focus,      {state:data}),
+    notes:      React.createElement(Notes,      {state:data,setState:setData,showToast}),
+    profile:    React.createElement(Profile,    {user,onLogout:handleLogout,state:data}),
   };
 
   return React.createElement(React.Fragment,null,
-    loading&&React.createElement('div',{className:'loading-overlay'},React.createElement('div',{className:'spinner'})),
+    // Indicador de guardado
+    saving && React.createElement('div',{style:{position:'fixed',top:12,right:12,zIndex:9999,fontSize:11,color:'var(--text3)',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 10px',display:'flex',alignItems:'center',gap:6}},
+      React.createElement('div',{className:'spinner',style:{width:12,height:12,borderWidth:2}}),'Guardando...'
+    ),
+
     React.createElement('nav',{className:'nav'},
       React.createElement('div',{className:'nav-logo'},'O'),
-      NAV.map(item=>React.createElement('button',{key:item.id,className:`nav-item${page===item.id?' active':''}`,title:item.label,onClick:()=>setPage(item.id)},React.createElement(Icon,{name:item.icon,size:20}))),
+      NAV_ITEMS.map(item=>React.createElement('button',{
+        key:item.id,
+        className:`nav-item${page===item.id?' active':''}`,
+        title:item.label,
+        onClick:()=>setPage(item.id)
+      },React.createElement(Icon,{name:item.icon,size:20}))),
       React.createElement('div',{className:'nav-bottom'},
-        React.createElement('button',{className:'nav-item',title:'Tema',onClick:toggleTheme},
+        React.createElement('button',{className:'nav-item',title:'Cambiar tema',onClick:toggleTheme},
           data.theme==='dark'?React.createElement(Icon,{name:'sun',size:18}):React.createElement(Icon,{name:'moon',size:18})
         )
       )
     ),
-    React.createElement('main',{className:'main'},PAGES[page]||PAGES.dashboard),
+
+    React.createElement('main',{className:'main'},
+      PAGES[page] || PAGES.dashboard
+    ),
+
     toast&&React.createElement(Toast,{msg:toast.msg,type:toast.type||'success',onDone:()=>setToast(null)})
   );
 }
