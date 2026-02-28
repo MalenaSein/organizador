@@ -471,12 +471,136 @@ function Dashboard({state,setPage,user}) {
 }
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
+
+// Helper: parse a subject's time string like "08:00-10:00" into {start, end}
+function parseSubjectTime(timeStr) {
+  if(!timeStr) return null;
+  const m = timeStr.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
+  if(!m) return null;
+  return { startH: parseInt(m[1]), startM: parseInt(m[2]), endH: parseInt(m[3]), endM: parseInt(m[4]) };
+}
+
+// Map short day labels to indices (Dom=0, Lun=1, ... Sáb=6)
+const DAY_IDX = {'Dom':0,'Lun':1,'Mar':2,'Mié':3,'Jue':4,'Vie':5,'Sáb':6};
+
+function FixedWeekCalendar({subjects, events}) {
+  // Show hours 7-22 for compactness
+  const START_H = 7, END_H = 22;
+  const hours = Array.from({length: END_H - START_H}, (_, i) => START_H + i);
+  // Days Mon-Sat (1-6 index), or Mon-Sun depends on subjects
+  const weekDays = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const weekDayIdx = [1,2,3,4,5,6];
+
+  // Today's day index
+  const todayDayIdx = new Date().getDay();
+
+  // Get current week dates for showing events
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay()); // Sunday
+  const weekDates = weekDayIdx.map(i => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return fmtDate(d);
+  });
+
+  const slotH = 44; // px per hour slot
+
+  return React.createElement('div',{style:{overflowX:'auto'}},
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:`52px repeat(${weekDays.length},1fr)`,minWidth:520}},
+      // Header row
+      React.createElement('div',{style:{padding:'8px 0'}}),
+      weekDays.map((d,i)=>React.createElement('div',{key:d,style:{
+        textAlign:'center',padding:'10px 4px',fontSize:12,fontWeight:700,
+        color: weekDayIdx[i]===todayDayIdx?'var(--accent)':'var(--text2)',
+        borderBottom:'2px solid var(--border)',
+        background: weekDayIdx[i]===todayDayIdx?'var(--accent-glow)':'transparent',
+        borderRadius: weekDayIdx[i]===todayDayIdx?'8px 8px 0 0':'0',
+        textTransform:'uppercase',letterSpacing:'0.5px'
+      }},d)),
+
+      // Time slots
+      hours.map(h=>React.createElement(React.Fragment,{key:h},
+        React.createElement('div',{style:{
+          fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',
+          paddingRight:8,paddingTop:6,textAlign:'right',
+          height:slotH,borderTop:'1px solid var(--border)'
+        }},`${p2(h)}:00`),
+        weekDays.map((d,di)=>{
+          const dayI = weekDayIdx[di];
+          // Find subjects that run on this day and overlap this hour
+          const subjectsHere = subjects.filter(sub=>{
+            if(!(sub.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return false;
+            const t = parseSubjectTime(sub.time);
+            if(!t) return false;
+            return t.startH === h || (t.startH < h && t.endH > h);
+          });
+          // Only render at the start hour to avoid duplicates
+          const subjectsStart = subjects.filter(sub=>{
+            if(!(sub.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return false;
+            const t = parseSubjectTime(sub.time);
+            return t && t.startH === h;
+          });
+          // Events for this weekday date
+          const dateStr = weekDates[di];
+          const eventsHere = events.filter(e=>e.date===dateStr && Number((e.start||'0').split(':')[0])===h);
+
+          return React.createElement('div',{key:d,style:{
+            borderLeft:'1px solid var(--border)',
+            borderTop:'1px solid var(--border)',
+            height:slotH,
+            position:'relative',
+            background: dayI===todayDayIdx?'rgba(124,106,247,0.03)':'transparent'
+          }},
+            subjectsStart.map(sub=>{
+              const t = parseSubjectTime(sub.time);
+              if(!t) return null;
+              const durH = (t.endH + t.endM/60) - (t.startH + t.startM/60);
+              const topOff = (t.startM/60)*slotH;
+              return React.createElement('div',{key:sub.id,style:{
+                position:'absolute',left:2,right:2,
+                top: topOff,
+                height: Math.max(durH*slotH - 2, 20),
+                background: sub.color,
+                borderRadius:6,
+                padding:'3px 6px',
+                fontSize:10,
+                fontWeight:700,
+                color:'#fff',
+                overflow:'hidden',
+                zIndex:2,
+                boxShadow:'0 2px 8px rgba(0,0,0,0.3)',
+                lineHeight:1.3
+              }},
+                React.createElement('div',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},sub.name),
+                sub.room&&React.createElement('div',{style:{opacity:0.8,fontSize:9}},sub.room)
+              );
+            }),
+            eventsHere.map(ev=>React.createElement('div',{key:ev.id,style:{
+              position:'absolute',left:2,right:2,top:2,
+              background:ev.color+'cc',
+              borderRadius:5,
+              padding:'2px 5px',
+              fontSize:10,
+              fontWeight:600,
+              color:'#fff',
+              overflow:'hidden',
+              zIndex:3,
+              border:`1px solid ${ev.color}`
+            }},ev.title))
+          );
+        })
+      ))
+    )
+  );
+}
+
 function Calendar({state,setState,showToast}) {
   const [view,setView]=useState('month');
   const [curr,setCurr]=useState(new Date());
   const [modal,setModal]=useState(false);
   const [editEv,setEditEv]=useState(null);
-  const blank={title:'',category:'facultad',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr()};
+  const blank={title:'',category:'facultad',subject:'',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr()};
   const [form,setForm]=useState(blank);
 
   const nav=dir=>{const d=new Date(curr);if(view==='month')d.setMonth(d.getMonth()+dir);else if(view==='week')d.setDate(d.getDate()+dir*7);else d.setDate(d.getDate()+dir);setCurr(d);};
@@ -492,13 +616,36 @@ function Calendar({state,setState,showToast}) {
   const del=id=>{setState(s=>({...s,events:s.events.filter(e=>e.id!==id)}));setModal(false);showToast('Evento eliminado');};
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
 
-  return React.createElement('div',null,
+  return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:24}},
     React.createElement('div',{className:'page-header'},
       React.createElement('h1',{className:'page-title'},'📅 ',React.createElement('span',null,'Calendario')),
-      React.createElement('button',{className:'btn btn-primary',onClick:()=>openNew()},React.createElement(Icon,{name:'plus',size:16}),'Agregar')
+      React.createElement('button',{className:'btn btn-primary',onClick:()=>openNew()},React.createElement(Icon,{name:'plus',size:16}),'Agregar Evento')
     ),
+
+    // ── SECCIÓN 1: Horario Semanal Fijo ──────────────────────────────────────
     React.createElement('div',{className:'card'},
-      React.createElement('div',{className:'flex items-center',style:{marginBottom:20,flexWrap:'wrap',gap:12}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}},
+        React.createElement('div',null,
+          React.createElement('div',{className:'card-title',style:{marginBottom:2}},'📚 Horario Semanal — Esta Semana'),
+          state.subjects.length===0&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},
+            'Agregá materias en la sección Facultad para verlas aquí'
+          )
+        ),
+        state.subjects.length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6}},
+          state.subjects.map(s=>React.createElement('span',{key:s.id,style:{
+            display:'inline-flex',alignItems:'center',gap:4,
+            padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,
+            background:s.color+'22',color:s.color,border:`1px solid ${s.color}44`
+          }},React.createElement('span',{style:{width:6,height:6,borderRadius:'50%',background:s.color,display:'inline-block'}}),s.name))
+        )
+      ),
+      React.createElement(FixedWeekCalendar,{subjects:state.subjects,events:state.events})
+    ),
+
+    // ── SECCIÓN 2: Calendario Dinámico ────────────────────────────────────────
+    React.createElement('div',{className:'card'},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:12}},
+        React.createElement('div',{className:'card-title',style:{marginBottom:0,marginRight:8}},'🗓 Vista Detallada'),
         React.createElement('div',{className:'tabs',style:{maxWidth:260}},
           [['month','Mes'],['week','Semana'],['day','Día']].map(([v,l])=>React.createElement('button',{key:v,className:`tab${view===v?' active':''}`,onClick:()=>setView(v)},l))
         ),
@@ -509,22 +656,45 @@ function Calendar({state,setState,showToast}) {
           React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setCurr(new Date())},'Hoy')
         )
       ),
-      view==='month'&&React.createElement(MonthView,{curr,events:state.events,onDay:openNew,onEvent:openEdit}),
-      view==='week'&&React.createElement(WeekView,{curr,events:state.events,onEvent:openEdit}),
-      view==='day'&&React.createElement(DayView,{curr,events:state.events,onEvent:openEdit}),
+      view==='month'&&React.createElement(MonthView,{curr,events:state.events,subjects:state.subjects,onDay:openNew,onEvent:openEdit}),
+      view==='week'&&React.createElement(WeekView,{curr,events:state.events,subjects:state.subjects,onEvent:openEdit}),
+      view==='day'&&React.createElement(DayView,{curr,events:state.events,subjects:state.subjects,onEvent:openEdit}),
     ),
+
     modal&&React.createElement(Modal,{title:editEv?'Editar Evento':'Nuevo Evento',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título'),React.createElement('input',{className:'input',value:form.title,placeholder:'Ej: Parcial Cálculo',onChange:F('title')})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Categoría'),React.createElement('select',{className:'input select',value:form.category,onChange:F('category')},['facultad','extracurricular','personal','hogar'].map(c=>React.createElement('option',{key:c,value:c},c)))),
+        state.subjects.length>0&&form.category==='facultad'&&React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Materia'),
+          React.createElement('select',{className:'input select',value:form.subject,onChange:F('subject')},
+            React.createElement('option',{value:''},'— Sin materia —'),
+            state.subjects.map(s=>React.createElement('option',{key:s.id,value:s.name},s.name))
+          )
+        ),
         React.createElement('div',{className:'grid-2',style:{gap:12}},
           React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Inicio'),React.createElement('input',{className:'input',type:'time',value:form.start,onChange:F('start')})),
           React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Fin'),React.createElement('input',{className:'input',type:'time',value:form.end,onChange:F('end')}))
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Fecha'),React.createElement('input',{className:'input',type:'date',value:form.date,onChange:F('date')})),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),
+          state.subjects.length>0&&form.subject
+            ? React.createElement('div',{style:{fontSize:12,color:'var(--text2)'}},
+                'Color de la materia: ',
+                React.createElement('span',{style:{color:state.subjects.find(s=>s.name===form.subject)?.color||'var(--accent)',fontWeight:700}},
+                  state.subjects.find(s=>s.name===form.subject)?.color||form.color
+                ),
+                ' (automático)'
+              )
+            : React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})
+        ),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:8}},
-          React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
+          React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:()=>{
+            // Auto-use subject color if subject is selected
+            const sub = state.subjects.find(s=>s.name===form.subject);
+            if(sub) setForm(f=>({...f,color:sub.color}));
+            save();
+          }},'Guardar'),
           editEv&&React.createElement('button',{className:'btn btn-danger',onClick:()=>del(editEv.id)},React.createElement(Icon,{name:'trash',size:16}))
         )
       )
@@ -532,7 +702,7 @@ function Calendar({state,setState,showToast}) {
   );
 }
 
-function MonthView({curr,events,onDay,onEvent}) {
+function MonthView({curr,events,subjects,onDay,onEvent}) {
   const yr=curr.getFullYear(),mo=curr.getMonth();
   const fd=new Date(yr,mo,1).getDay(),dim=new Date(yr,mo+1,0).getDate(),prev=new Date(yr,mo,0).getDate();
   const ts=todayStr(),cells=[];
@@ -544,51 +714,83 @@ function MonthView({curr,events,onDay,onEvent}) {
       DAYS.map(d=>React.createElement('div',{key:d,className:'cal-day-name'},d)),
       cells.map((c,i)=>{
         const evs=events.filter(e=>e.date===c.date);
+        const cellDate = new Date(c.date+'T12:00:00');
+        const dayOfWeek = cellDate.getDay();
+        // Subject indicators for this day of week
+        const subs = subjects.filter(s=>(s.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek));
         return React.createElement('div',{key:i,className:`cal-day${!c.curr?' other-month':''}${c.date===ts?' today':''}`,onClick:()=>onDay(c.date)},
           React.createElement('div',{className:'cal-day-num'},c.day),
+          subs.slice(0,1).map(sub=>React.createElement('div',{key:sub.id,className:'cal-event-dot',style:{background:sub.color+'88',fontSize:9}},
+            '📚 ',sub.name
+          )),
           evs.slice(0,2).map(ev=>React.createElement('div',{key:ev.id,className:'cal-event-dot',style:{background:ev.color},onClick:e=>{e.stopPropagation();onEvent(ev);}},ev.title)),
-          evs.length>2&&React.createElement('div',{style:{fontSize:10,color:'var(--text3)',marginTop:2}},'+',evs.length-2,' más')
+          (evs.length+subs.length)>3&&React.createElement('div',{style:{fontSize:10,color:'var(--text3)',marginTop:2}},'+',evs.length+subs.length-3,' más')
         );
       })
     )
   );
 }
 
-function WeekView({curr,events,onEvent}) {
+function WeekView({curr,events,subjects,onEvent}) {
   const s=new Date(curr);s.setDate(s.getDate()-s.getDay());
   const days=Array.from({length:7},(_,i)=>{const d=new Date(s);d.setDate(d.getDate()+i);return d;});
   const ts=todayStr();
+  const START_H=7, END_H=22;
   return React.createElement('div',{style:{overflowX:'auto'}},
     React.createElement('div',{className:'week-grid',style:{minWidth:600}},
       React.createElement('div',{style:{paddingTop:40}}),
       days.map(d=>React.createElement('div',{key:+d,className:'week-day-head',style:{color:fmtDate(d)===ts?'var(--accent)':'',fontWeight:fmtDate(d)===ts?700:600}},DAYS[d.getDay()]+' '+d.getDate())),
-      Array.from({length:24},(_,h)=>React.createElement(React.Fragment,{key:h},
+      Array.from({length:END_H-START_H},(_,hi)=>{const h=START_H+hi;return React.createElement(React.Fragment,{key:h},
         React.createElement('div',{className:'week-time-col'},`${p2(h)}:00`),
         days.map(d=>{
           const ds=fmtDate(d);
+          const dayI=d.getDay();
           const evs=events.filter(e=>e.date===ds&&Number((e.start||'0').split(':')[0])===h);
+          const subs=subjects.filter(sub=>{
+            if(!(sub.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return false;
+            const t=parseSubjectTime(sub.time);
+            return t&&t.startH===h;
+          });
           return React.createElement('div',{key:+d,className:'week-slot'},
+            subs.map(sub=>{
+              const t=parseSubjectTime(sub.time);
+              const durH=(t.endH+t.endM/60)-(t.startH+t.startM/60);
+              return React.createElement('div',{key:sub.id,className:'week-event',style:{
+                background:sub.color,top:0,height:Math.max(durH*40-2,20),
+                border:`1px solid ${sub.color}`,fontSize:10,opacity:0.9
+              }},'📚 '+sub.name);
+            }),
             evs.map(ev=>React.createElement('div',{key:ev.id,className:'week-event',style:{background:ev.color,top:0,height:36},onClick:e=>{e.stopPropagation();onEvent(ev);}},ev.title))
           );
         })
-      ))
+      )})
     )
   );
 }
 
-function DayView({curr,events,onEvent}) {
+function DayView({curr,events,subjects,onEvent}) {
   const ds=fmtDate(curr);
   const dayEvs=events.filter(e=>e.date===ds);
+  const dayI=curr.getDay();
+  const START_H=7,END_H=22;
   return React.createElement('div',{style:{overflowY:'auto',maxHeight:'60vh'}},
     React.createElement('div',{className:'week-grid',style:{gridTemplateColumns:'60px 1fr'}},
       React.createElement('div'),
       React.createElement('div',{className:'week-day-head'},DAYS[curr.getDay()]+' '+curr.getDate()+' de '+MONTHS[curr.getMonth()]),
-      Array.from({length:24},(_,h)=>React.createElement(React.Fragment,{key:h},
+      Array.from({length:END_H-START_H},(_,hi)=>{const h=START_H+hi;return React.createElement(React.Fragment,{key:h},
         React.createElement('div',{className:'week-time-col'},`${p2(h)}:00`),
         React.createElement('div',{className:'week-slot'},
+          subjects.filter(sub=>{
+            if(!(sub.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return false;
+            const t=parseSubjectTime(sub.time);return t&&t.startH===h;
+          }).map(sub=>{
+            const t=parseSubjectTime(sub.time);
+            const durH=(t.endH+t.endM/60)-(t.startH+t.startM/60);
+            return React.createElement('div',{key:sub.id,className:'week-event',style:{background:sub.color,height:Math.max(durH*40-2,20),top:0,fontSize:10}},'📚 '+sub.name+(sub.room?' · '+sub.room:''));
+          }),
           dayEvs.filter(e=>Number((e.start||'0').split(':')[0])===h).map(ev=>React.createElement('div',{key:ev.id,className:'week-event',style:{background:ev.color},onClick:e=>{e.stopPropagation();onEvent(ev);}},ev.title+' '+ev.start+'-'+ev.end))
         )
-      ))
+      )})
     )
   );
 }
