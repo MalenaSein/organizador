@@ -100,18 +100,24 @@
   .splash-sub{color:var(--text3);font-size:14px;}
 
   /* ── CALENDAR ── */
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
-  .cal-day-name{text-align:center;font-size:11px;font-weight:700;color:var(--text3);padding:8px 0;text-transform:uppercase;letter-spacing:1px;}
-  .cal-day{min-height:80px;padding:8px;border-radius:12px;background:var(--bg3);cursor:pointer;transition:all var(--transition);border:1px solid transparent;}
+  .cal-wrapper{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(44px,1fr));gap:3px;min-width:308px;}
+  .cal-day-name{text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:6px 0;text-transform:uppercase;letter-spacing:0.5px;}
+  .cal-day{min-height:70px;padding:6px;border-radius:10px;background:var(--bg3);cursor:pointer;transition:all var(--transition);border:1px solid transparent;}
   .cal-day:hover{border-color:var(--accent-glow);}
   .cal-day.today{border-color:var(--accent);background:var(--accent-glow);}
   .cal-day.other-month{opacity:0.35;}
-  .cal-day-num{font-size:13px;font-weight:600;color:var(--text2);}
+  .cal-day-num{font-size:12px;font-weight:600;color:var(--text2);}
   .cal-day.today .cal-day-num{color:var(--accent);}
-  .cal-event-dot{width:100%;border-radius:3px;padding:2px 4px;font-size:10px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:3px;}
-  .week-grid{display:grid;grid-template-columns:60px repeat(7,1fr);}
+  .cal-event-dot{width:100%;border-radius:3px;padding:2px 3px;font-size:9px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:2px;}
+  @media(max-width:768px){
+    .cal-day{min-height:56px;padding:4px;}
+    .cal-day-num{font-size:11px;}
+    .cal-event-dot{font-size:8px;padding:1px 3px;}
+  }
+  .week-grid{display:grid;grid-template-columns:48px repeat(7,1fr);}
   .week-day-head{text-align:center;padding:12px 4px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);}
-  .week-time-col{font-size:11px;color:var(--text3);font-family:var(--mono);padding-top:6px;text-align:right;padding-right:12px;}
+  .week-time-col{font-size:10px;color:var(--text3);font-family:var(--mono);padding-top:6px;text-align:right;padding-right:8px;}
   .week-slot{border-left:1px solid var(--border);border-bottom:1px solid rgba(255,255,255,0.03);height:40px;position:relative;cursor:pointer;}
   .week-slot:hover{background:var(--accent-glow);}
   .week-event{position:absolute;left:2px;right:2px;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;color:#fff;overflow:hidden;cursor:pointer;z-index:2;white-space:nowrap;text-overflow:ellipsis;}
@@ -487,7 +493,7 @@ function parseSubjectTime(timeStr) {
 const DAY_IDX = {'Dom':0,'Lun':1,'Mar':2,'Mié':3,'Jue':4,'Vie':5,'Sáb':6};
 
 function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
-  const START_H = 7, END_H = 22;
+  const START_H = 6, END_H = 24;
   const hours = Array.from({length: END_H - START_H}, (_, i) => START_H + i);
   const weekDays = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
   const weekDayIdx = [1,2,3,4,5,6];
@@ -722,7 +728,7 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
   for(let i=fd-1;i>=0;i--)cells.push({day:prev-i,curr:false,date:`${yr}-${p2(mo)}-${p2(prev-i)}`});
   for(let d=1;d<=dim;d++)cells.push({day:d,curr:true,date:`${yr}-${p2(mo+1)}-${p2(d)}`});
   while(cells.length%7!==0){const nx=cells.length-fd-dim+1;cells.push({day:nx,curr:false,date:`${yr}-${p2(mo+2)}-${p2(nx)}`});}
-  return React.createElement('div',null,
+  return React.createElement('div',{className:'cal-wrapper'},
     React.createElement('div',{className:'cal-grid'},
       DAYS.map(d=>React.createElement('div',{key:d,className:'cal-day-name'},d)),
       cells.map((c,i)=>{
@@ -752,9 +758,9 @@ function WeekView({curr,events,subjects,activities,tasks,onEvent,onSlot}) {
   const s=new Date(curr);s.setDate(s.getDate()-s.getDay());
   const days=Array.from({length:7},(_,i)=>{const d=new Date(s);d.setDate(d.getDate()+i);return d;});
   const ts=todayStr();
-  const START_H=7,END_H=22;
+  const START_H=6,END_H=24;
   return React.createElement('div',{style:{overflowX:'auto'}},
-    React.createElement('div',{className:'week-grid',style:{minWidth:600}},
+    React.createElement('div',{className:'week-grid',style:{minWidth:580}},
       React.createElement('div',{style:{paddingTop:40}}),
       days.map(d=>React.createElement('div',{key:+d,className:'week-day-head',style:{color:fmtDate(d)===ts?'var(--accent)':'',fontWeight:fmtDate(d)===ts?700:600}},DAYS[d.getDay()]+' '+d.getDate())),
       Array.from({length:END_H-START_H},(_,hi)=>{const h=START_H+hi;return React.createElement(React.Fragment,{key:h},
@@ -797,9 +803,9 @@ function DayView({curr,events,subjects,activities,tasks,onEvent,onSlot}) {
   const ds=fmtDate(curr);
   const dayEvs=events.filter(e=>e.date===ds);
   const dayI=curr.getDay();
-  const START_H=7,END_H=22;
+  const START_H=6,END_H=24;
   return React.createElement('div',{style:{overflowY:'auto',maxHeight:'60vh'}},
-    React.createElement('div',{className:'week-grid',style:{gridTemplateColumns:'60px 1fr'}},
+    React.createElement('div',{className:'week-grid',style:{gridTemplateColumns:'48px 1fr'}},
       React.createElement('div'),
       React.createElement('div',{className:'week-day-head'},DAYS[curr.getDay()]+' '+curr.getDate()+' de '+MONTHS[curr.getMonth()]),
       Array.from({length:END_H-START_H},(_,hi)=>{const h=START_H+hi;return React.createElement(React.Fragment,{key:h},
