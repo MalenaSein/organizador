@@ -399,7 +399,7 @@ function Dashboard({state,setPage,user}) {
     React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},sub)
   );
 
-  return React.createElement('div',null,
+  return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:24}},
     React.createElement('div',{className:'page-header'},
       React.createElement('div',null,
         React.createElement('div',{className:'text-sm text-muted'},greet),
@@ -407,18 +407,18 @@ function Dashboard({state,setPage,user}) {
       ),
       React.createElement('button',{className:'btn btn-primary',onClick:()=>setPage('calendar')},React.createElement(Icon,{name:'plus',size:16}),'Nuevo Evento')
     ),
-    React.createElement('div',{className:'grid-4'},
+    React.createElement('div',{className:'grid-4',style:{gap:16}},
       SC('Eventos Hoy',todayEvs.length,'programados','#7c6af7'),
       SC('Pendientes',pendT,'tareas','#fb923c'),
       SC('Completadas',doneT,'tareas','#4ade80'),
       SC('Hábitos',habPct+'%','semanal','#22d3ee')
     ),
     React.createElement('div',{className:'grid-2',style:{gap:20}},
-      React.createElement('div',{className:'card'},
+      React.createElement('div',{className:'card',style:{padding:28}},
         React.createElement('div',{className:'card-title'},'📅 Eventos de Hoy'),
         todayEvs.length===0
-          ? React.createElement('p',{className:'text-sm text-muted'},'Sin eventos para hoy 🎉')
-          : todayEvs.map(ev=>React.createElement('div',{key:ev.id,className:'task-item',style:{borderLeft:`3px solid ${ev.color}`}},
+          ? React.createElement('p',{className:'text-sm text-muted',style:{padding:'12px 0'}},'Sin eventos para hoy 🎉')
+          : todayEvs.map(ev=>React.createElement('div',{key:ev.id,className:'task-item',style:{borderLeft:`3px solid ${ev.color}`,marginBottom:8}},
               React.createElement('div',{className:'dot',style:{background:ev.color}}),
               React.createElement('div',null,
                 React.createElement('div',{style:{fontWeight:600,fontSize:14}},ev.title),
@@ -426,10 +426,10 @@ function Dashboard({state,setPage,user}) {
               )
             ))
       ),
-      React.createElement('div',{className:'card'},
+      React.createElement('div',{className:'card',style:{padding:28}},
         React.createElement('div',{className:'card-title'},'🔥 Tareas Urgentes'),
         state.tasks.filter(t=>t.priority==='alta'&&t.status!=='completada').slice(0,4).map(t=>
-          React.createElement('div',{key:t.id,className:'task-item'},
+          React.createElement('div',{key:t.id,className:'task-item',style:{marginBottom:8}},
             React.createElement('div',{className:'dot',style:{background:'var(--red)'}}),
             React.createElement('div',null,
               React.createElement('div',{style:{fontWeight:600,fontSize:14}},t.title),
@@ -438,28 +438,28 @@ function Dashboard({state,setPage,user}) {
           )
         ),
         state.tasks.filter(t=>t.priority==='alta'&&t.status!=='completada').length===0&&
-          React.createElement('p',{className:'text-sm text-muted'},'Sin urgentes ✅')
+          React.createElement('p',{className:'text-sm text-muted',style:{padding:'12px 0'}},'Sin urgentes ✅')
       )
     ),
     React.createElement('div',{className:'grid-2',style:{gap:20}},
-      React.createElement('div',{className:'card'},
+      React.createElement('div',{className:'card',style:{padding:28}},
         React.createElement('div',{className:'card-title'},'📚 Materias'),
         state.subjects.length===0
-          ? React.createElement('p',{className:'text-sm text-muted',style:{cursor:'pointer',color:'var(--accent)'},onClick:()=>setPage('faculty')},'+ Agregar materias')
-          : React.createElement('div',{className:'flex',style:{flexWrap:'wrap',gap:8}},
+          ? React.createElement('p',{className:'text-sm text-muted',style:{cursor:'pointer',color:'var(--accent)',padding:'12px 0'},onClick:()=>setPage('faculty')},'+ Agregar materias')
+          : React.createElement('div',{className:'flex',style:{flexWrap:'wrap',gap:10,paddingTop:4}},
               state.subjects.map(s=>React.createElement('div',{key:s.id,className:'subject-chip',style:{borderColor:s.color+'44',color:s.color}},
                 React.createElement('div',{style:{width:6,height:6,borderRadius:'50%',background:s.color}}),s.name
               ))
             )
       ),
-      React.createElement('div',{className:'card'},
+      React.createElement('div',{className:'card',style:{padding:28}},
         React.createElement('div',{className:'card-title'},'💚 Hábitos Semanales'),
         state.habits.length===0
-          ? React.createElement('p',{className:'text-sm text-muted',style:{cursor:'pointer',color:'var(--accent)'},onClick:()=>setPage('habits')},'+ Agregar hábitos')
+          ? React.createElement('p',{className:'text-sm text-muted',style:{cursor:'pointer',color:'var(--accent)',padding:'12px 0'},onClick:()=>setPage('habits')},'+ Agregar hábitos')
           : state.habits.slice(0,4).map(h=>{
               const pct=Math.min(h.done.length/7*100,100);
-              return React.createElement('div',{key:h.id,style:{marginBottom:10}},
-                React.createElement('div',{className:'flex justify-between',style:{marginBottom:4}},
+              return React.createElement('div',{key:h.id,style:{marginBottom:14}},
+                React.createElement('div',{className:'flex justify-between',style:{marginBottom:6}},
                   React.createElement('span',{className:'text-sm'},h.icon,' ',h.name),
                   React.createElement('span',{className:'text-xs text-muted'},h.streak,' 🔥')
                 ),
@@ -1173,26 +1173,47 @@ function Notes({state,setState,showToast}) {
 function Profile({user,onLogout,state}) {
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},React.createElement('h1',{className:'page-title'},'👤 ',React.createElement('span',null,'Mi Perfil'))),
-    React.createElement('div',{className:'grid-2',style:{gap:20,alignItems:'start'}},
+    React.createElement('div',{className:'grid-2',style:{gap:24,alignItems:'start'}},
       React.createElement('div',{className:'card'},
-        React.createElement('div',{className:'flex items-center gap-4',style:{marginBottom:24}},
-          React.createElement('div',{style:{width:64,height:64,borderRadius:'50%',background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff',flexShrink:0}},
+        // Avatar centrado arriba
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:16,marginBottom:28,paddingBottom:24,borderBottom:'1px solid var(--border)'}},
+          React.createElement('div',{style:{
+            width:80,height:80,borderRadius:'50%',
+            background:'linear-gradient(135deg,var(--accent),#a78bfa)',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:34,fontWeight:800,color:'#fff',
+            boxShadow:'0 8px 24px var(--accent-glow)'
+          }},
             (user.displayName||user.email||'?')[0].toUpperCase()
           ),
-          React.createElement('div',null,
-            React.createElement('div',{style:{fontSize:20,fontWeight:700}},user.displayName||'Sin nombre'),
-            React.createElement('div',{className:'text-sm text-muted'},user.email),
-            React.createElement('div',{style:{fontSize:11,color:'var(--green)',marginTop:4}},'● Conectado via Firebase')
+          React.createElement('div',{style:{textAlign:'center'}},
+            React.createElement('div',{style:{fontSize:22,fontWeight:700,marginBottom:4}},user.displayName||'Sin nombre'),
+            React.createElement('div',{className:'text-sm text-muted',style:{marginBottom:6}},user.email),
+            React.createElement('div',{style:{
+              display:'inline-flex',alignItems:'center',gap:6,
+              fontSize:11,color:'var(--green)',
+              background:'rgba(74,222,128,0.1)',padding:'4px 12px',borderRadius:20,
+              border:'1px solid rgba(74,222,128,0.2)'
+            }},'● Conectado via Firebase')
           )
         ),
-        React.createElement('hr',{className:'divider'}),
-        React.createElement('p',{className:'text-sm text-muted',style:{marginBottom:20,lineHeight:1.6}},'Tus datos se guardan automáticamente en Firebase Firestore. Podés acceder desde cualquier dispositivo.'),
-        React.createElement('button',{className:'btn btn-danger',style:{justifyContent:'center'},onClick:onLogout},
+        React.createElement('p',{className:'text-sm text-muted',style:{marginBottom:24,lineHeight:1.7,textAlign:'center'}},
+          'Tus datos se guardan automáticamente en Firebase Firestore.',React.createElement('br',null),'Podés acceder desde cualquier dispositivo.'
+        ),
+        React.createElement('button',{className:'btn btn-danger',style:{width:'100%',justifyContent:'center'},onClick:onLogout},
           React.createElement(Icon,{name:'logout',size:16}),' Cerrar Sesión'
+        ),
+        React.createElement('div',{style:{marginTop:12}},
+          React.createElement('button',{
+            id:'profile-install-btn',
+            className:'btn btn-ghost',
+            style:{width:'100%',justifyContent:'center',fontSize:13},
+            onClick:()=>{if(window._pwaReady)window.installPWA();else alert('Para instalar la app: abrí este sitio en Chrome/Edge y usá el menú del navegador → "Instalar aplicación" o "Agregar a pantalla de inicio".');}
+          },'📲 Instalar como app')
         )
       ),
       React.createElement('div',{className:'card'},
-        React.createElement('div',{className:'card-title'},'Resumen'),
+        React.createElement('div',{className:'card-title'},'Resumen de tu cuenta'),
         [
           ['📚 Materias',state.subjects.length],
           ['🏃 Actividades',state.activities.length],
@@ -1200,9 +1221,12 @@ function Profile({user,onLogout,state}) {
           ['💚 Hábitos',state.habits.length],
           ['📝 Notas',state.notes.length],
           ['📅 Eventos',state.events.length],
-        ].map(([l,v])=>React.createElement('div',{key:l,className:'flex justify-between',style:{padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:14}},
+        ].map(([l,v])=>React.createElement('div',{key:l,style:{
+          display:'flex',justifyContent:'space-between',alignItems:'center',
+          padding:'14px 0',borderBottom:'1px solid var(--border)',fontSize:14
+        }},
           React.createElement('span',{className:'text-muted'},l),
-          React.createElement('span',{style:{fontWeight:700}},v)
+          React.createElement('span',{style:{fontWeight:700,fontSize:18,color:'var(--accent)'}},v)
         ))
       )
     )
@@ -1431,39 +1455,119 @@ function App() {
   );
 }
 
+// ─── PWA MANIFEST (injected dynamically) ─────────────────────────────────────
+(function(){
+  const manifest = {
+    name: "Organizador Personal",
+    short_name: "Organizador",
+    description: "Tu organizador personal y académico",
+    start_url: window.location.href,
+    display: "standalone",
+    background_color: "#0f0f13",
+    theme_color: "#7c6af7",
+    orientation: "portrait",
+    icons: [
+      {
+        src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='80' fill='%237c6af7'/><text y='360' x='80' font-size='320' font-family='sans-serif'>📋</text></svg>",
+        sizes: "512x512",
+        type: "image/svg+xml",
+        purpose: "any maskable"
+      }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement('link');
+  link.rel   = 'manifest';
+  link.href  = url;
+  document.head.appendChild(link);
+})();
+
 // ─── PWA SERVICE WORKER ───────────────────────────────────────────────────────
 if('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE='org-v1';
-    self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['.']))));
-    self.addEventListener('fetch',e=>e.respondWith(fetch(e.request).catch(()=>caches.match(e.request))));
+    const CACHE = 'organizador-v2';
+    self.addEventListener('install', e => {
+      self.skipWaiting();
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll([self.location.href])));
+    });
+    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+    self.addEventListener('fetch', e => {
+      e.respondWith(
+        fetch(e.request).then(r => {
+          const clone = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return r;
+        }).catch(() => caches.match(e.request))
+      );
+    });
   `;
-  const blob = new Blob([swCode],{type:'text/javascript'});
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl).catch(()=>{});
+  const blob   = new Blob([swCode], {type:'text/javascript'});
+  const swUrl  = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl, {scope: '/'}).catch(()=>{});
 }
 
 // ─── PWA INSTALL PROMPT ───────────────────────────────────────────────────────
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt',e=>{
+let deferredPrompt = null;
+window._pwaReady   = false;
+
+window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
-  deferredPrompt=e;
-  // Show install banner after 2 seconds
-  setTimeout(()=>{
-    const banner = document.createElement('div');
-    banner.id='pwa-banner';
-    banner.style.cssText='position:fixed;bottom:72px;left:50%;transform:translateX(-50%);z-index:9990;background:var(--accent);color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(124,106,247,0.4);white-space:nowrap;';
-    banner.innerHTML='📲 Instalá la app <button onclick="installPWA()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;">Instalar</button> <button onclick="document.getElementById(\'pwa-banner\').remove()" style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:18px;line-height:1;">×</button>';
-    document.body.appendChild(banner);
-  },2000);
+  deferredPrompt    = e;
+  window._pwaReady  = true;
+  // Show floating install banner
+  showInstallBanner();
 });
-window.installPWA = async()=>{
+
+function showInstallBanner() {
+  if(document.getElementById('pwa-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'pwa-banner';
+  banner.style.cssText = [
+    'position:fixed',
+    'bottom:80px',
+    'left:50%',
+    'transform:translateX(-50%)',
+    'z-index:9990',
+    'background:#7c6af7',
+    'color:#fff',
+    'padding:14px 20px',
+    'border-radius:16px',
+    'font-size:14px',
+    'font-weight:600',
+    'display:flex',
+    'align-items:center',
+    'gap:14px',
+    'box-shadow:0 8px 32px rgba(124,106,247,0.5)',
+    'white-space:nowrap',
+    'animation:slideUp 0.3s ease',
+    'font-family:Outfit,sans-serif'
+  ].join(';');
+  banner.innerHTML = `
+    <span>📲 Instalá la app</span>
+    <button id="pwa-install-btn" style="background:rgba(255,255,255,0.22);border:none;color:#fff;padding:8px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:Outfit,sans-serif;">Instalar</button>
+    <button id="pwa-close-btn" style="background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:20px;line-height:1;padding:0 4px;">×</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('pwa-install-btn').onclick = window.installPWA;
+  document.getElementById('pwa-close-btn').onclick   = () => banner.remove();
+}
+
+window.installPWA = async () => {
   if(!deferredPrompt) return;
   deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt=null;
-  const b=document.getElementById('pwa-banner');
+  const choice = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  window._pwaReady = false;
+  const b = document.getElementById('pwa-banner');
   if(b) b.remove();
+  if(choice.outcome === 'accepted') {
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#17171f;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 20px;font-size:14px;font-weight:500;color:#f0f0f5;';
+    t.textContent = '✅ App instalada correctamente';
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(), 3000);
+  }
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
