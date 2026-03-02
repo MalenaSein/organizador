@@ -1751,93 +1751,33 @@ function App() {
   );
 }
 
-// ─── PWA MANIFEST (injected dynamically) ─────────────────────────────────────
-(function(){
-  const manifest = {
-    name: "Organizador Personal",
-    short_name: "Organizador",
-    description: "Tu organizador personal y académico",
-    start_url: window.location.href,
-    display: "standalone",
-    background_color: "#0f0f13",
-    theme_color: "#7c6af7",
-    orientation: "portrait",
-    icons: [
-      {
-        src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='80' fill='%237c6af7'/><text y='360' x='80' font-size='320' font-family='sans-serif'>📋</text></svg>",
-        sizes: "512x512",
-        type: "image/svg+xml",
-        purpose: "any maskable"
-      }
-    ]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
-  const url  = URL.createObjectURL(blob);
-  const link = document.createElement('link');
-  link.rel   = 'manifest';
-  link.href  = url;
-  document.head.appendChild(link);
-})();
-
-// ─── PWA SERVICE WORKER ───────────────────────────────────────────────────────
-if('serviceWorker' in navigator) {
-  const swCode = `
-    const CACHE = 'organizador-v2';
-    self.addEventListener('install', e => {
-      self.skipWaiting();
-      e.waitUntil(caches.open(CACHE).then(c => c.addAll([self.location.href])));
-    });
-    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-    self.addEventListener('fetch', e => {
-      e.respondWith(
-        fetch(e.request).then(r => {
-          const clone = r.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-          return r;
-        }).catch(() => caches.match(e.request))
-      );
-    });
-  `;
-  const blob   = new Blob([swCode], {type:'text/javascript'});
-  const swUrl  = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl, {scope: '/'}).catch(()=>{});
-}
-
 // ─── PWA INSTALL PROMPT ───────────────────────────────────────────────────────
 let deferredPrompt = null;
 window._pwaReady   = false;
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
-  deferredPrompt    = e;
-  window._pwaReady  = true;
-  // Show floating install banner
+  deferredPrompt   = e;
+  window._pwaReady = true;
   showInstallBanner();
 });
 
+window.addEventListener('appinstalled', () => {
+  const b = document.getElementById('pwa-banner');
+  if (b) b.remove();
+});
+
 function showInstallBanner() {
-  if(document.getElementById('pwa-banner')) return;
+  if (document.getElementById('pwa-banner')) return;
   const banner = document.createElement('div');
   banner.id = 'pwa-banner';
   banner.style.cssText = [
-    'position:fixed',
-    'bottom:80px',
-    'left:50%',
-    'transform:translateX(-50%)',
-    'z-index:9990',
-    'background:#7c6af7',
-    'color:#fff',
-    'padding:14px 20px',
-    'border-radius:16px',
-    'font-size:14px',
-    'font-weight:600',
-    'display:flex',
-    'align-items:center',
-    'gap:14px',
+    'position:fixed','bottom:80px','left:50%','transform:translateX(-50%)',
+    'z-index:9990','background:#7c6af7','color:#fff',
+    'padding:14px 20px','border-radius:16px','font-size:14px','font-weight:600',
+    'display:flex','align-items:center','gap:14px',
     'box-shadow:0 8px 32px rgba(124,106,247,0.5)',
-    'white-space:nowrap',
-    'animation:slideUp 0.3s ease',
-    'font-family:Outfit,sans-serif'
+    'white-space:nowrap','font-family:Outfit,sans-serif'
   ].join(';');
   banner.innerHTML = `
     <span>📲 Instalá la app</span>
@@ -1850,28 +1790,30 @@ function showInstallBanner() {
 }
 
 window.installPWA = async () => {
-  if(!deferredPrompt) return;
+  if (!deferredPrompt) return;
   deferredPrompt.prompt();
-  const choice = await deferredPrompt.userChoice;
-  deferredPrompt = null;
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt   = null;
   window._pwaReady = false;
   const b = document.getElementById('pwa-banner');
-  if(b) b.remove();
-  if(choice.outcome === 'accepted') {
+  if (b) b.remove();
+  if (outcome === 'accepted') {
     const t = document.createElement('div');
     t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#17171f;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 20px;font-size:14px;font-weight:500;color:#f0f0f5;';
     t.textContent = '✅ App instalada correctamente';
     document.body.appendChild(t);
-    setTimeout(()=>t.remove(), 3000);
+    setTimeout(() => t.remove(), 3000);
   }
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
-</script>
-<script>
+
+// ─── SERVICE WORKER (archivo externo) ────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/organizador/service-worker.js');
+    navigator.serviceWorker.register('/organizador/service-worker.js')
+      .then(reg => reg.update())
+      .catch(err => console.warn('SW:', err));
   });
 }
 </script>
