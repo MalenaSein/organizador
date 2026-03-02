@@ -719,13 +719,9 @@ function getSubjectSchedulesForDay(subject, dayIdx) {
 }
 
 // ─── OVERLAP LAYOUT HELPER ────────────────────────────────────────────────────
-// Given a list of blocks with {top, height, ...}, assigns colIndex and colTotal
-// so overlapping blocks split the column width evenly (same as Google Calendar).
 function assignOverlapColumns(blocks) {
   if(!blocks.length) return blocks;
-  // Sort by top position
   const sorted = [...blocks].sort((a,b) => a.top - b.top);
-  // Group overlapping blocks
   const groups = [];
   let currentGroup = [sorted[0]];
   let groupEnd = sorted[0].top + sorted[0].height;
@@ -741,7 +737,6 @@ function assignOverlapColumns(blocks) {
     }
   }
   groups.push(currentGroup);
-  // Assign columns within each group
   const result = [];
   for(const group of groups) {
     const n = group.length;
@@ -752,118 +747,97 @@ function assignOverlapColumns(blocks) {
   return result;
 }
 
-// ─── FIXED WEEK CALENDAR (CORRECTED) ─────────────────────────────────────────
-function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
+// ─── SHARED WEEK RENDERER (used by both FixedWeekCalendar and WeekView) ───────
+// buildWeekBlocks: given dayI, dateStr, returns all blocks for that day
+function buildWeekDayBlocks(subjects, activities, events, tasks, dayI, dateStr) {
   const START_H=6, END_H=24;
   const TOTAL_H = END_H - START_H;
-  const hours = Array.from({length:TOTAL_H},(_,i)=>START_H+i);
-  const weekDays=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const todayDayIdx = new Date().getDay();
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate()-now.getDay());
-  const weekDates = [0,1,2,3,4,5,6].map(i=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return fmtDate(d);});
   const ROW_H = 44;
   const TOTAL_PX = TOTAL_H * ROW_H;
+  const blocks = [];
 
-  const buildDayBlocks = (dayI, dateStr) => {
-    const blocks = [];
-
-    // Subject blocks
-    subjects.forEach(sub => {
-      if(!isSubjectActiveOnDate(sub, dateStr)) return;
-      getSubjectSchedulesForDay(sub, dayI).forEach(sch => {
-        const t = parseSubjectTime(sch.time);
-        if(!t) return;
-        const topFrac = ((t.startH + t.startM/60) - START_H) / TOTAL_H;
-        const durH = (t.endH + t.endM/60) - (t.startH + t.startM/60);
-        if(durH <= 0 || topFrac < 0 || topFrac >= 1) return;
-        blocks.push({
-          key: 's'+sub.id+'_'+t.startH+'_'+t.startM,
-          bg: sub.color,
-          label: sub.name,
-          sub2: sch.room,
-          top: topFrac * TOTAL_PX,
-          height: Math.max(durH * ROW_H - 3, 18),
-        });
-      });
-    });
-
-    // Activity blocks
-    (activities||[]).forEach(a => {
-      if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return;
-      const t = parseSubjectTime(a.time);
+  subjects.forEach(sub => {
+    if(!isSubjectActiveOnDate(sub, dateStr)) return;
+    getSubjectSchedulesForDay(sub, dayI).forEach(sch => {
+      const t = parseSubjectTime(sch.time);
       if(!t) return;
       const topFrac = ((t.startH + t.startM/60) - START_H) / TOTAL_H;
       const durH = (t.endH + t.endM/60) - (t.startH + t.startM/60);
       if(durH <= 0 || topFrac < 0 || topFrac >= 1) return;
-      const icon = a.icon && !a.icon.startsWith('__svg__') ? a.icon : '🏃';
       blocks.push({
-        key: 'a'+a.id,
-        bg: a.color,
-        label: icon+' '+a.name,
-        top: topFrac * TOTAL_PX,
-        height: Math.max(durH * ROW_H - 3, 18),
+        key: 's'+sub.id+'_'+t.startH+'_'+t.startM,
+        bg: sub.color, label: '📚 '+sub.name, sub2: sch.room,
+        top: topFrac * TOTAL_PX, height: Math.max(durH * ROW_H - 3, 18),
       });
     });
+  });
 
-    // Event blocks
-    events.filter(e=>e.date===dateStr).forEach(ev => {
-      const startH = Number((ev.start||'0:00').split(':')[0]);
-      const startM = Number((ev.start||'0:00').split(':')[1]||0);
-      const endH   = Number((ev.end||'0:00').split(':')[0]);
-      const endM   = Number((ev.end||'0:00').split(':')[1]||0);
-      const topFrac = ((startH + startM/60) - START_H) / TOTAL_H;
-      const durH = (endH + endM/60) - (startH + startM/60);
-      if(topFrac < 0 || topFrac >= 1) return;
-      blocks.push({
-        key: 'ev'+ev.id,
-        bg: ev.color,
-        label: ev.title,
-        top: topFrac * TOTAL_PX,
-        height: Math.max(durH > 0 ? durH * ROW_H - 3 : ROW_H * 0.5, 16),
-      });
+  (activities||[]).forEach(a => {
+    if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return;
+    const t = parseSubjectTime(a.time);
+    if(!t) return;
+    const topFrac = ((t.startH + t.startM/60) - START_H) / TOTAL_H;
+    const durH = (t.endH + t.endM/60) - (t.startH + t.startM/60);
+    if(durH <= 0 || topFrac < 0 || topFrac >= 1) return;
+    const icon = a.icon && !a.icon.startsWith('__svg__') ? a.icon : '🏃';
+    blocks.push({
+      key: 'a'+a.id, bg: a.color, label: icon+' '+a.name,
+      top: topFrac * TOTAL_PX, height: Math.max(durH * ROW_H - 3, 18),
     });
+  });
 
-    // Task "due today" chips — pinned at very top, don't participate in overlap grouping
-    const taskChips = (tasks||[]).filter(t=>t.dueDate===dateStr&&t.status!=='completada').slice(0,2).map((t,ti)=>({
-      key: 'task'+t.id,
-      bg: 'rgba(248,113,113,0.9)',
-      label: '✅ '+t.title,
-      top: ti * 20,
-      height: 17,
-      isTask: true,
-      colIndex: 0,
-      colTotal: 1,
-    }));
+  (events||[]).filter(e=>e.date===dateStr).forEach(ev => {
+    const startH = Number((ev.start||'0:00').split(':')[0]);
+    const startM = Number((ev.start||'0:00').split(':')[1]||0);
+    const endH   = Number((ev.end||'0:00').split(':')[0]);
+    const endM   = Number((ev.end||'0:00').split(':')[1]||0);
+    const topFrac = ((startH + startM/60) - START_H) / TOTAL_H;
+    const durH = (endH + endM/60) - (startH + startM/60);
+    if(topFrac < 0 || topFrac >= 1) return;
+    blocks.push({
+      key: 'ev'+ev.id, bg: ev.color, label: ev.title,
+      top: topFrac * TOTAL_PX,
+      height: Math.max(durH > 0 ? durH * ROW_H - 3 : ROW_H * 0.5, 16),
+      isClickable: true, evData: ev,
+    });
+  });
 
-    // Run overlap detection on the timed blocks (not task chips)
-    const timedWithCols = assignOverlapColumns(blocks);
+  const taskChips = (tasks||[]).filter(t=>t.dueDate===dateStr&&t.status!=='completada').slice(0,2).map((t,ti)=>({
+    key: 'task'+t.id, bg: 'rgba(248,113,113,0.9)', label: '✅ '+t.title,
+    top: ti * 20, height: 17, isTask: true, colIndex: 0, colTotal: 1,
+  }));
 
-    return [...timedWithCols, ...taskChips];
-  };
+  const timedWithCols = assignOverlapColumns(blocks);
+  return [...timedWithCols, ...taskChips];
+}
+
+function WeekCalendarGrid({weekDates, subjects, events, activities, tasks, onSlotClick, onEventClick}) {
+  const START_H=6, END_H=24;
+  const TOTAL_H = END_H - START_H;
+  const ROW_H = 44;
+  const TOTAL_PX = TOTAL_H * ROW_H;
+  const hours = Array.from({length:TOTAL_H},(_,i)=>START_H+i);
+  const weekDays=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const ts = todayStr();
 
   return React.createElement('div',{style:{overflowX:'auto'}},
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:`52px repeat(7,1fr)`,minWidth:520}},
-      // Header row
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',minWidth:520}},
+      // Header
       React.createElement('div',{style:{padding:'8px 0'}}),
       weekDays.map((d,i)=>React.createElement('div',{key:d,style:{
         textAlign:'center',padding:'10px 4px',fontSize:12,fontWeight:700,
-        color:i===todayDayIdx?'var(--accent)':'var(--text2)',
+        color:weekDates[i]===ts?'var(--accent)':'var(--text2)',
         borderBottom:'2px solid var(--border)',
-        background:i===todayDayIdx?'var(--accent-glow)':'transparent',
-        borderRadius:i===todayDayIdx?'8px 8px 0 0':'0',
+        background:weekDates[i]===ts?'var(--accent-glow)':'transparent',
+        borderRadius:weekDates[i]===ts?'8px 8px 0 0':'0',
         textTransform:'uppercase',letterSpacing:'0.5px'
-      }},d)),
+      }},d+' '+new Date(weekDates[i]+'T12:00:00').getDate())),
 
       // Time column
       React.createElement('div',{style:{position:'relative',height:TOTAL_PX,borderTop:'1px solid var(--border)'}},
         hours.map(h=>React.createElement('div',{key:h,style:{
-          position:'absolute',
-          top: (h-START_H)*ROW_H,
-          right:8,
-          fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',
-          lineHeight:'1',paddingTop:4
+          position:'absolute',top:(h-START_H)*ROW_H,right:8,
+          fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',lineHeight:'1',paddingTop:4
         }},`${p2(h)}:00`))
       ),
 
@@ -871,7 +845,7 @@ function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
       weekDays.map((d,di)=>{
         const dayI=di;
         const dateStr=weekDates[di];
-        const blocks=buildDayBlocks(dayI,dateStr);
+        const blocks=buildWeekDayBlocks(subjects,activities,events,tasks,dayI,dateStr);
 
         return React.createElement('div',{key:d,
           onClick:e=>{
@@ -884,50 +858,36 @@ function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
             onSlotClick&&onSlotClick(dateStr,`${p2(clickH)}:${p2(clickM)}`);
           },
           style:{
-            position:'relative',
-            height:TOTAL_PX,
-            borderLeft:'1px solid var(--border)',
-            borderTop:'1px solid var(--border)',
+            position:'relative',height:TOTAL_PX,
+            borderLeft:'1px solid var(--border)',borderTop:'1px solid var(--border)',
             cursor:'pointer',
-            background:dayI===todayDayIdx?'rgba(124,106,247,0.03)':'transparent',
+            background:weekDates[di]===ts?'rgba(124,106,247,0.03)':'transparent',
           }
         },
-          // Hour grid lines
           hours.map(h=>React.createElement('div',{key:h,style:{
             position:'absolute',top:(h-START_H)*ROW_H,left:0,right:0,
-            borderTop:'1px solid rgba(255,255,255,0.04)',
-            pointerEvents:'none'
+            borderTop:'1px solid rgba(255,255,255,0.04)',pointerEvents:'none'
           }})),
-
-          // Event/subject blocks — now with overlap-aware positioning
           blocks.map((item)=>{
             const colTotal = item.colTotal || 1;
             const colIndex = item.colIndex || 0;
             const GUTTER = 2;
-            // Each column gets an equal slice of the available width
             const colWidthPct = (100 - GUTTER * (colTotal + 1)) / colTotal;
             const leftPct = GUTTER + colIndex * (colWidthPct + GUTTER);
-
             return React.createElement('div',{
               key:item.key,
-              onClick:e=>e.stopPropagation(),
+              onClick:e=>{e.stopPropagation();item.isClickable&&item.evData&&onEventClick&&onEventClick(item.evData);},
               style:{
                 position:'absolute',
-                left: item.isTask ? 2 : `calc(${leftPct}% )`,
+                left: item.isTask ? 2 : `calc(${leftPct}%)`,
                 width: item.isTask ? 'calc(100% - 4px)' : `calc(${colWidthPct}% - 1px)`,
-                top: item.top,
-                height: item.height,
-                background: item.bg,
-                borderRadius: 6,
-                padding: '3px 6px',
-                fontSize: 9,
-                fontWeight: 700,
-                color: '#fff',
-                overflow: 'hidden',
+                top: item.top, height: item.height,
+                background: item.bg, borderRadius: 6,
+                padding: '3px 6px', fontSize: 9, fontWeight: 700,
+                color: '#fff', overflow: 'hidden',
                 zIndex: item.isTask ? 10 : 5,
                 boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                lineHeight: 1.3,
-                cursor: 'pointer',
+                lineHeight: 1.3, cursor: 'pointer',
               }
             },
               React.createElement('div',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:10}},item.label),
@@ -938,6 +898,19 @@ function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
       })
     )
   );
+}
+
+// ─── FIXED WEEK CALENDAR (semana actual) ──────────────────────────────────────
+function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate()-now.getDay());
+  const weekDates = [0,1,2,3,4,5,6].map(i=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return fmtDate(d);});
+
+  return React.createElement(WeekCalendarGrid,{
+    weekDates, subjects, events, activities, tasks,
+    onSlotClick, onEventClick: null
+  });
 }
 
 function Calendar({state,setState,showToast}) {
@@ -1058,44 +1031,17 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
   );
 }
 
+// ─── WEEK VIEW (flexible, igual visual al fijo) ────────────────────────────────
 function WeekView({curr,events,subjects,activities,tasks,onEvent,onSlot}) {
-  const s=new Date(curr);s.setDate(s.getDate()-s.getDay());
-  const days=Array.from({length:7},(_,i)=>{const d=new Date(s);d.setDate(d.getDate()+i);return d;});
-  const ts=todayStr();
-  const START_H=6,END_H=24;
-  return React.createElement('div',{style:{overflowX:'auto'}},
-    React.createElement('div',{className:'week-grid',style:{minWidth:580}},
-      React.createElement('div',{style:{paddingTop:40}}),
-      days.map(d=>React.createElement('div',{key:+d,className:'week-day-head',style:{color:fmtDate(d)===ts?'var(--accent)':'',fontWeight:fmtDate(d)===ts?700:600}},DAYS[d.getDay()]+' '+d.getDate())),
-      Array.from({length:END_H-START_H},(_,hi)=>{const h=START_H+hi;return React.createElement(React.Fragment,{key:h},
-        React.createElement('div',{className:'week-time-col'},`${p2(h)}:00`),
-        days.map(d=>{
-          const ds=fmtDate(d);const dayI=d.getDay();
-          const evs=events.filter(e=>e.date===ds&&Number((e.start||'0').split(':')[0])===h);
-          const subBlocks=[];
-          subjects.forEach(sub=>{
-            if(!isSubjectActiveOnDate(sub,ds)) return;
-            getSubjectSchedulesForDay(sub,dayI).forEach(sch=>{
-              const t=parseSubjectTime(sch.time);
-              if(t&&t.startH===h) { const durH=(t.endH+t.endM/60)-(t.startH+t.startM/60); subBlocks.push({key:'s'+sub.id+h,bg:sub.color,label:'📚 '+sub.name,height:Math.max(durH*40-2,20),onClick:e=>e.stopPropagation()}); }
-            });
-          });
-          const acts=(activities||[]).filter(a=>{if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayI))return false;const t=parseSubjectTime(a.time);return t&&t.startH===h;});
-          const tasksDue=(tasks||[]).filter(t=>t.dueDate===ds&&t.status!=='completada'&&h===8);
-          const allItems=[
-            ...subBlocks,
-            ...acts.map(a=>{const t=parseSubjectTime(a.time);const durH=t?(t.endH+t.endM/60)-(t.startH+t.startM/60):1;return{key:'a'+a.id,bg:a.color,label:(a.icon&&!a.icon.startsWith('__svg__')?a.icon:'🏃')+' '+a.name,height:Math.max(durH*40-2,20),onClick:e=>e.stopPropagation()};}),
-            ...evs.map(ev=>({key:'e'+ev.id,bg:ev.color,label:ev.title,height:36,onClick:e=>{e.stopPropagation();onEvent(ev);}})),
-          ];
-          const total=allItems.length||1;
-          return React.createElement('div',{key:+d,className:'week-slot',style:{position:'relative'},onClick:()=>onSlot&&onSlot(ds,`${p2(h)}:00`)},
-            allItems.map((item,idx)=>React.createElement('div',{key:item.key,className:'week-event',style:{background:item.bg,top:0,height:item.height,fontSize:10,left:`calc(2px + ${idx/total*100}%)`,right:`calc(2px + ${(total-idx-1)/total*100}%)`},onClick:item.onClick},item.label)),
-            tasksDue.slice(0,2).map((t,ti)=>React.createElement('div',{key:t.id,className:'week-event',style:{background:'#f87171',top:ti*18,height:16,fontSize:9,left:2,right:2},onClick:e=>e.stopPropagation()},'✅ '+t.title))
-          );
-        })
-      )})
-    )
-  );
+  const weekStart = new Date(curr);
+  weekStart.setDate(curr.getDate()-curr.getDay());
+  const weekDates = [0,1,2,3,4,5,6].map(i=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return fmtDate(d);});
+
+  return React.createElement(WeekCalendarGrid,{
+    weekDates, subjects, events, activities, tasks,
+    onSlotClick: onSlot,
+    onEventClick: onEvent,
+  });
 }
 
 function DayView({curr,events,subjects,activities,tasks,onEvent,onSlot}) {
