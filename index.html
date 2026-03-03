@@ -1447,16 +1447,43 @@ function Tasks({state,setState,showToast}) {
 }
 
 // ─── HABITS ───────────────────────────────────────────────────────────────────
+function getWeekKey(date) {
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 3 - (d.getDay()+6)%7);
+  const week1 = new Date(d.getFullYear(),0,4);
+  const wn = 1 + Math.round(((d-week1)/86400000 - 3 + (week1.getDay()+6)%7)/7);
+  return `${d.getFullYear()}-W${String(wn).padStart(2,'0')}`;
+}
+
 function Habits({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
   const [form,setForm]=useState({name:'',icon:'⭐'});
-  const DS=['L','M','X','J','V','S','D'];
+  const DS_LABELS=['L','M','X','J','V','S','D'];
+  // Hoy: Mon=0 … Sun=6
+  const todayDowRaw = new Date().getDay(); // 0=Dom
+  const todayDow = todayDowRaw===0 ? 6 : todayDowRaw-1;
+  const currentWeek = getWeekKey(new Date());
+
+  // Auto-reset cada lunes: si lastWeek != currentWeek, limpia los checks
+  useEffect(()=>{
+    if(!state.habits||state.habits.length===0) return;
+    const needsReset = state.habits.some(h=>(h.lastWeek||'')!==currentWeek);
+    if(!needsReset) return;
+    setState(s=>({...s,habits:s.habits.map(h=>{
+      if((h.lastWeek||'')===currentWeek) return h;
+      const lastStreak=(h.done||[]).length>=5?(h.streak||0):0;
+      return {...h,done:[],lastWeek:currentWeek,streak:lastStreak};
+    })}));
+  },[]);
+
   const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{
     if(h.id!==hid) return h;
     const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];
-    return {...h,done,streak:done.length};
+    return {...h,done,lastWeek:currentWeek,streak:done.length};
   })}));
+
   const openNew=()=>{setEditing(null);setForm({name:'',icon:'⭐'});setModal(true);};
   const openEdit=h=>{setEditing(h);setForm({name:h.name,icon:h.icon});setModal(true);};
   const save=()=>{
@@ -1465,49 +1492,93 @@ function Habits({state,setState,showToast}) {
       setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon}:h)}));
       showToast('Hábito actualizado');
     } else {
-      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0}]}));
+      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,lastWeek:currentWeek}]}));
       showToast('Hábito agregado');
     }
     setModal(false);setEditing(null);setForm({name:'',icon:'⭐'});
   };
   const del=id=>{setState(s=>({...s,habits:s.habits.filter(h=>h.id!==id)}));showToast('Hábito eliminado');};
-  const totH=state.habits.length*7,doneH=state.habits.reduce((a,h)=>a+h.done.length,0);
+
+  const totH=state.habits.length*7;
+  const doneH=state.habits.reduce((a,h)=>a+(h.done||[]).length,0);
   const wPct=Math.round(doneH/Math.max(totH,1)*100);
+
   return React.createElement('div',null,
+    // ── Header ──
     React.createElement('div',{className:'page-header'},
       React.createElement('h1',{className:'page-title'},'💚 ',React.createElement('span',null,'Hábitos')),
       React.createElement('button',{className:'btn btn-primary',onClick:openNew},React.createElement(Icon,{name:'plus',size:16}),'Hábito')
     ),
+
+    // ── Progreso semanal ──
     React.createElement('div',{className:'card',style:{marginBottom:20}},
-      React.createElement('div',{className:'card-title'},'Progreso Semanal'),
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}},
+        React.createElement('div',{className:'card-title',style:{marginBottom:0}},'Progreso Semanal'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--accent)',fontWeight:600}},'↺ Se resetea cada lunes')
+      ),
       React.createElement('div',{className:'flex items-center gap-3'},
-        React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:80}},wPct+'%'),
+        React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:72}},wPct+'%'),
         React.createElement('div',{style:{flex:1}},
-          React.createElement('div',{className:'progress-bar',style:{height:10}},React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})),
+          React.createElement('div',{className:'progress-bar',style:{height:10}},
+            React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})
+          ),
           React.createElement('div',{className:'text-xs text-muted',style:{marginTop:6}},doneH,' de ',totH,' checks esta semana')
         )
       )
     ),
-    React.createElement('div',{style:{display:'flex',marginBottom:12,paddingLeft:220,gap:4}},DS.map(d=>React.createElement('div',{key:d,style:{width:28,textAlign:'center',fontSize:11,color:'var(--text3)',fontWeight:700}},d))),
+
     state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
-    state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item'},
-      React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer'},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
-      React.createElement('div',{style:{minWidth:150,cursor:'pointer'},onClick:()=>openEdit(h)},
-        React.createElement('div',{style:{fontSize:14,fontWeight:600}},h.name),
-        React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
+
+    // ── Tarjetas de hábitos — label encima del dot, grilla de 7 columnas ──
+    state.habits.map(h=>React.createElement('div',{key:h.id,className:'card',style:{marginBottom:12,padding:'16px 18px'}},
+      // Fila 1: icono + nombre + racha + botones
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:14}},
+        React.createElement('div',{style:{fontSize:24,flexShrink:0,cursor:'pointer'},onClick:()=>openEdit(h)},
+          renderIcon(h.icon,24)
+        ),
+        React.createElement('div',{style:{flex:1,cursor:'pointer'},onClick:()=>openEdit(h)},
+          React.createElement('div',{style:{fontSize:15,fontWeight:700,lineHeight:1.2}},h.name),
+          React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},
+            (h.done||[]).length,' días esta semana 🔥',
+            h.streak>0?` · Racha: ${h.streak}`:''
+          )
+        ),
+        React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+        )
       ),
-      React.createElement('div',{style:{display:'flex',gap:4,flex:1}},
-        DS.map((_,i)=>React.createElement('div',{key:i,className:`habit-dot${h.done.includes(i)?' done':''}`,onClick:()=>toggle(h.id,i)},h.done.includes(i)?'✓':''))
-      ),
-      React.createElement('div',{style:{display:'flex',gap:4,marginLeft:8}},
-        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
-        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+      // Fila 2: grilla 7 col — label ENCIMA del cuadrado, perfectamente alineados
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6}},
+        DS_LABELS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:5}},
+          React.createElement('div',{style:{
+            fontSize:10,fontWeight:700,
+            color:i===todayDow?'var(--accent)':'var(--text3)',
+            textTransform:'uppercase'
+          }},label),
+          React.createElement('div',{
+            className:`habit-dot${(h.done||[]).includes(i)?' done':''}`,
+            style:{
+              width:'100%',maxWidth:40,height:32,borderRadius:8,
+              background:(h.done||[]).includes(i)?'var(--green)':i===todayDow?'rgba(124,106,247,0.15)':'var(--bg)',
+              border:(h.done||[]).includes(i)?'none':i===todayDow?'2px solid var(--accent)':'1px solid var(--border)',
+              display:'flex',alignItems:'center',justifyContent:'center',
+              fontSize:14,cursor:'pointer',transition:'all 0.15s',
+            },
+            onClick:()=>toggle(h.id,i)
+          },(h.done||[]).includes(i)?'✓':'')
+        ))
       )
     )),
+
+    // ── Modal ──
     modal&&React.createElement(Modal,{title:editing?'Editar Hábito':'Nuevo Hábito',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement(IconPicker,{value:form.icon,onChange:ic=>setForm(f=>({...f,icon:ic})),icons:EMOJI_ICONS_HABITS,label:'Ícono'}),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Nombre'),
+          React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',autoFocus:true,value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})
+        ),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editing&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editing.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
