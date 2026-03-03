@@ -112,9 +112,10 @@
   .cal-day.today .cal-day-num{color:var(--accent);}
   .cal-event-dot{width:100%;border-radius:3px;padding:2px 3px;font-size:9px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:2px;}
   @media(max-width:768px){
-    .cal-day{min-height:56px;padding:4px;}
-    .cal-day-num{font-size:11px;}
-    .cal-event-dot{font-size:8px;padding:1px 3px;}
+    .cal-day{min-height:72px;padding:5px;}
+    .cal-day-num{font-size:13px;font-weight:700;}
+    .cal-event-dot{font-size:9px;padding:2px 3px;}
+    .cal-grid{gap:4px;}
   }
   .week-grid{display:grid;grid-template-columns:48px repeat(7,1fr);}
   .week-day-head{text-align:center;padding:12px 4px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);}
@@ -826,120 +827,134 @@ function WeekCalendarGrid({weekDates, subjects, events, activities, tasks, onSlo
   const hours = Array.from({length:TOTAL_H},(_,i)=>START_H+i);
   const weekDays=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const ts = todayStr();
+  const [dayPopup, setDayPopup] = useState(null); // dateStr
 
   // Compute max tasks in any day to size the task banner row
   const dayTaskCounts = weekDates.map(ds=>(tasks||[]).filter(t=>t.dueDate===ds&&t.status!=='completada').length);
   const maxTasks = Math.max(...dayTaskCounts, 0);
   const TASK_ROW_H = maxTasks > 0 ? Math.max(maxTasks * 22 + 8, 32) : 0;
 
-  return React.createElement('div',{style:{overflowX:'auto'}},
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',minWidth:520}},
+  return React.createElement('div',null,
+    dayPopup && React.createElement(DayDetailPopup,{
+      dateStr: dayPopup,
+      events, subjects, activities, tasks,
+      onClose: ()=>setDayPopup(null),
+      onNewEvent: (date)=>{ setDayPopup(null); onSlotClick&&onSlotClick(date,'09:00'); },
+      onEditEvent: (ev)=>{ setDayPopup(null); onEventClick&&onEventClick(ev); },
+    }),
+    React.createElement('div',{style:{overflowX:'auto'}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',minWidth:520}},
 
-      // ── Header row ──
-      React.createElement('div',{style:{padding:'8px 0'}}),
-      weekDays.map((d,i)=>React.createElement('div',{key:d,style:{
-        textAlign:'center',padding:'10px 4px',fontSize:12,fontWeight:700,
-        color:weekDates[i]===ts?'var(--accent)':'var(--text2)',
-        borderBottom:'2px solid var(--border)',
-        background:weekDates[i]===ts?'var(--accent-glow)':'transparent',
-        borderRadius:weekDates[i]===ts?'8px 8px 0 0':'0',
-        textTransform:'uppercase',letterSpacing:'0.5px'
-      }},d+' '+new Date(weekDates[i]+'T12:00:00').getDate())),
-
-      // ── Task banner row (only if there are tasks) ──
-      ...(maxTasks > 0 ? [
-        React.createElement('div',{key:'task-label',style:{
-          fontSize:9,color:'var(--red)',fontWeight:700,textTransform:'uppercase',
-          letterSpacing:'0.5px',paddingTop:6,paddingRight:6,textAlign:'right',
-          height:TASK_ROW_H,flexShrink:0,lineHeight:1.2
-        }},'VENCE'),
-        ...weekDays.map((d,di)=>{
-          const ds = weekDates[di];
-          const dayTasks = (tasks||[]).filter(t=>t.dueDate===ds&&t.status!=='completada');
-          return React.createElement('div',{key:'tasks-'+d,style:{
-            height:TASK_ROW_H,
-            borderLeft:'1px solid var(--border)',
-            borderBottom:'2px solid rgba(248,113,113,0.25)',
-            background:dayTasks.length>0?'rgba(248,113,113,0.04)':'transparent',
-            padding:'4px 3px',
-            display:'flex',flexDirection:'column',gap:2,
-          }},
-            dayTasks.map(t=>React.createElement('div',{key:t.id,style:{
-              background:'rgba(248,113,113,0.85)',
-              borderRadius:4,padding:'2px 5px',
-              fontSize:9,fontWeight:700,color:'#fff',
-              overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',
-              lineHeight:1.4,flexShrink:0,
-              boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
-            }},'✅ '+t.title))
-          );
-        })
-      ] : []),
-
-      // ── Time column ──
-      React.createElement('div',{style:{position:'relative',height:TOTAL_PX,borderTop:'1px solid var(--border)'}},
-        hours.map(h=>React.createElement('div',{key:h,style:{
-          position:'absolute',top:(h-START_H)*ROW_H,right:8,
-          fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',lineHeight:'1',paddingTop:4
-        }},`${p2(h)}:00`))
-      ),
-
-      // ── Day columns (timed events only, no tasks) ──
-      weekDays.map((d,di)=>{
-        const dayI=di;
-        const dateStr=weekDates[di];
-        // Build blocks WITHOUT tasks (tasks are in the banner above)
-        const blocks = buildWeekDayBlocks(subjects, activities, events, [], dayI, dateStr);
-
-        return React.createElement('div',{key:d,
-          onClick:e=>{
-            const rect=e.currentTarget.getBoundingClientRect();
-            const y=e.clientY-rect.top;
-            const fraction=Math.max(0,Math.min(1,y/TOTAL_PX));
-            const totalMins=Math.floor(fraction*TOTAL_H*60);
-            const clickH=START_H+Math.floor(totalMins/60);
-            const clickM=totalMins%60;
-            onSlotClick&&onSlotClick(dateStr,`${p2(clickH)}:${p2(clickM)}`);
-          },
+        // ── Header row — tap day name to open popup ──
+        React.createElement('div',{style:{padding:'8px 0'}}),
+        weekDays.map((d,i)=>React.createElement('div',{
+          key:d,
+          onClick:()=>setDayPopup(weekDates[i]),
           style:{
-            position:'relative',height:TOTAL_PX,
-            borderLeft:'1px solid var(--border)',borderTop:'1px solid var(--border)',
+            textAlign:'center',padding:'10px 4px',fontSize:12,fontWeight:700,
+            color:weekDates[i]===ts?'var(--accent)':'var(--text2)',
+            borderBottom:'2px solid var(--border)',
+            background:weekDates[i]===ts?'var(--accent-glow)':'transparent',
+            borderRadius:weekDates[i]===ts?'8px 8px 0 0':'0',
+            textTransform:'uppercase',letterSpacing:'0.5px',
             cursor:'pointer',
-            background:weekDates[di]===ts?'rgba(124,106,247,0.03)':'transparent',
           }
-        },
-          hours.map(h=>React.createElement('div',{key:h,style:{
-            position:'absolute',top:(h-START_H)*ROW_H,left:0,right:0,
-            borderTop:'1px solid rgba(255,255,255,0.04)',pointerEvents:'none'
-          }})),
-          blocks.map((item)=>{
-            const colTotal = item.colTotal || 1;
-            const colIndex = item.colIndex || 0;
-            const GUTTER = 2;
-            const colWidthPct = (100 - GUTTER * (colTotal + 1)) / colTotal;
-            const leftPct = GUTTER + colIndex * (colWidthPct + GUTTER);
-            return React.createElement('div',{
-              key:item.key,
-              onClick:e=>{e.stopPropagation();item.isClickable&&item.evData&&onEventClick&&onEventClick(item.evData);},
-              style:{
-                position:'absolute',
-                left: `calc(${leftPct}%)`,
-                width: `calc(${colWidthPct}% - 1px)`,
-                top: item.top, height: item.height,
-                background: item.bg, borderRadius: 6,
-                padding: '3px 6px', fontSize: 9, fontWeight: 700,
-                color: '#fff', overflow: 'hidden',
-                zIndex: 5,
-                boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                lineHeight: 1.3, cursor: 'pointer',
-              }
-            },
-              React.createElement('div',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:10}},item.label),
-              item.sub2&&React.createElement('div',{style:{opacity:0.75,fontSize:8,marginTop:1}},item.sub2)
+        },d+' '+new Date(weekDates[i]+'T12:00:00').getDate())),
+
+        // ── Task banner row (only if there are tasks) ──
+        ...(maxTasks > 0 ? [
+          React.createElement('div',{key:'task-label',style:{
+            fontSize:9,color:'var(--red)',fontWeight:700,textTransform:'uppercase',
+            letterSpacing:'0.5px',paddingTop:6,paddingRight:6,textAlign:'right',
+            height:TASK_ROW_H,flexShrink:0,lineHeight:1.2
+          }},'VENCE'),
+          ...weekDays.map((d,di)=>{
+            const ds = weekDates[di];
+            const dayTasks = (tasks||[]).filter(t=>t.dueDate===ds&&t.status!=='completada');
+            return React.createElement('div',{key:'tasks-'+d,style:{
+              height:TASK_ROW_H,
+              borderLeft:'1px solid var(--border)',
+              borderBottom:'2px solid rgba(248,113,113,0.25)',
+              background:dayTasks.length>0?'rgba(248,113,113,0.04)':'transparent',
+              padding:'4px 3px',
+              display:'flex',flexDirection:'column',gap:2,
+            }},
+              dayTasks.map(t=>React.createElement('div',{key:t.id,style:{
+                background:'rgba(248,113,113,0.85)',
+                borderRadius:4,padding:'2px 5px',
+                fontSize:9,fontWeight:700,color:'#fff',
+                overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',
+                lineHeight:1.4,flexShrink:0,
+                boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+              }},'✅ '+t.title))
             );
           })
-        );
-      })
+        ] : []),
+
+        // ── Time column ──
+        React.createElement('div',{style:{position:'relative',height:TOTAL_PX,borderTop:'1px solid var(--border)'}},
+          hours.map(h=>React.createElement('div',{key:h,style:{
+            position:'absolute',top:(h-START_H)*ROW_H,right:8,
+            fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',lineHeight:'1',paddingTop:4
+          }},`${p2(h)}:00`))
+        ),
+
+        // ── Day columns (timed events only, no tasks) ──
+        weekDays.map((d,di)=>{
+          const dayI=di;
+          const dateStr=weekDates[di];
+          const blocks = buildWeekDayBlocks(subjects, activities, events, [], dayI, dateStr);
+
+          return React.createElement('div',{key:d,
+            onClick:e=>{
+              const rect=e.currentTarget.getBoundingClientRect();
+              const y=e.clientY-rect.top;
+              const fraction=Math.max(0,Math.min(1,y/TOTAL_PX));
+              const totalMins=Math.floor(fraction*TOTAL_H*60);
+              const clickH=START_H+Math.floor(totalMins/60);
+              const clickM=totalMins%60;
+              onSlotClick&&onSlotClick(dateStr,`${p2(clickH)}:${p2(clickM)}`);
+            },
+            style:{
+              position:'relative',height:TOTAL_PX,
+              borderLeft:'1px solid var(--border)',borderTop:'1px solid var(--border)',
+              cursor:'pointer',
+              background:weekDates[di]===ts?'rgba(124,106,247,0.03)':'transparent',
+            }
+          },
+            hours.map(h=>React.createElement('div',{key:h,style:{
+              position:'absolute',top:(h-START_H)*ROW_H,left:0,right:0,
+              borderTop:'1px solid rgba(255,255,255,0.04)',pointerEvents:'none'
+            }})),
+            blocks.map((item)=>{
+              const colTotal = item.colTotal || 1;
+              const colIndex = item.colIndex || 0;
+              const GUTTER = 2;
+              const colWidthPct = (100 - GUTTER * (colTotal + 1)) / colTotal;
+              const leftPct = GUTTER + colIndex * (colWidthPct + GUTTER);
+              return React.createElement('div',{
+                key:item.key,
+                onClick:e=>{e.stopPropagation();item.isClickable&&item.evData&&onEventClick&&onEventClick(item.evData);},
+                style:{
+                  position:'absolute',
+                  left: `calc(${leftPct}%)`,
+                  width: `calc(${colWidthPct}% - 1px)`,
+                  top: item.top, height: item.height,
+                  background: item.bg, borderRadius: 6,
+                  padding: '3px 6px', fontSize: 9, fontWeight: 700,
+                  color: '#fff', overflow: 'hidden',
+                  zIndex: 5,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                  lineHeight: 1.3, cursor: 'pointer',
+                }
+              },
+                React.createElement('div',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontSize:10}},item.label),
+                item.sub2&&React.createElement('div',{style:{opacity:0.75,fontSize:8,marginTop:1}},item.sub2)
+              );
+            })
+          );
+        })
+      )
     )
   );
 }
@@ -1039,38 +1054,192 @@ function Calendar({state,setState,showToast}) {
   );
 }
 
+// ─── DAY DETAIL POPUP ────────────────────────────────────────────────────────
+function DayDetailPopup({dateStr, events, subjects, activities, tasks, onClose, onNewEvent, onEditEvent}) {
+  const d = new Date(dateStr+'T12:00:00');
+  const dayOfWeek = d.getDay();
+  const dayName = DAYS[dayOfWeek];
+  const dayNum = d.getDate();
+  const monthName = MONTHS[d.getMonth()];
+
+  const subs = subjects.filter(s => {
+    if(!isSubjectActiveOnDate(s, dateStr)) return false;
+    return getSubjectSchedulesForDay(s, dayOfWeek).length > 0;
+  });
+  const acts = (activities||[]).filter(a=>(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek));
+  const dayEvs = (events||[]).filter(e=>e.date===dateStr);
+  const dayTasks = (tasks||[]).filter(t=>t.dueDate===dateStr&&t.status!=='completada');
+
+  const total = subs.length + acts.length + dayEvs.length + dayTasks.length;
+
+  return React.createElement('div',{
+    className:'overlay',
+    onClick:e=>e.target.className.includes('overlay')&&onClose()
+  },
+    React.createElement('div',{className:'modal',style:{maxWidth:420,padding:24}},
+      // Header
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontSize:22,fontWeight:800,color:'var(--text)'}},dayName+' '+dayNum),
+          React.createElement('div',{style:{fontSize:13,color:'var(--text3)'}},monthName+' '+d.getFullYear())
+        ),
+        React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+          React.createElement('button',{
+            className:'btn btn-primary btn-sm',
+            onClick:()=>{onClose();onNewEvent(dateStr);}
+          },React.createElement(Icon,{name:'plus',size:14}),' Evento'),
+          React.createElement('button',{className:'btn btn-ghost btn-icon',style:{width:32,height:32},onClick:onClose},
+            React.createElement(Icon,{name:'x',size:14})
+          )
+        )
+      ),
+
+      total===0 && React.createElement('div',{style:{
+        textAlign:'center',padding:'32px 0',color:'var(--text3)',fontSize:13
+      }},'🌙 Sin nada agendado para este día'),
+
+      // Materias
+      subs.length>0 && React.createElement('div',{style:{marginBottom:16}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--text3)',marginBottom:8}},'📚 Materias'),
+        subs.map(s=>{
+          const scheds = getSubjectSchedulesForDay(s, dayOfWeek);
+          return scheds.map((sch,si)=>React.createElement('div',{
+            key:s.id+'-'+si,
+            style:{
+              display:'flex',alignItems:'center',gap:10,padding:'10px 12px',
+              borderRadius:10,background:'var(--bg3)',marginBottom:6,
+              borderLeft:`3px solid ${s.color}`
+            }
+          },
+            React.createElement('div',{style:{flex:1}},
+              React.createElement('div',{style:{fontWeight:600,fontSize:14,color:s.color}},s.name),
+              React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},
+                sch.time||'Sin horario',sch.room?' · 🚪 '+sch.room:''
+              )
+            )
+          ));
+        })
+      ),
+
+      // Actividades
+      acts.length>0 && React.createElement('div',{style:{marginBottom:16}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--text3)',marginBottom:8}},'🏃 Actividades'),
+        acts.map(a=>React.createElement('div',{
+          key:a.id,
+          style:{
+            display:'flex',alignItems:'center',gap:10,padding:'10px 12px',
+            borderRadius:10,background:'var(--bg3)',marginBottom:6,
+            borderLeft:`3px solid ${a.color}`
+          }
+        },
+          React.createElement('div',{style:{fontSize:20,flexShrink:0}},
+            a.icon&&!a.icon.startsWith('__svg__')?a.icon:'🏃'
+          ),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontWeight:600,fontSize:14}},a.name),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},a.time||'Sin horario')
+          )
+        ))
+      ),
+
+      // Eventos
+      dayEvs.length>0 && React.createElement('div',{style:{marginBottom:16}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--text3)',marginBottom:8}},'📅 Eventos'),
+        dayEvs.map(ev=>React.createElement('div',{
+          key:ev.id,
+          onClick:()=>{onClose();onEditEvent(ev);},
+          style:{
+            display:'flex',alignItems:'center',gap:10,padding:'10px 12px',
+            borderRadius:10,background:'var(--bg3)',marginBottom:6,
+            borderLeft:`3px solid ${ev.color}`,cursor:'pointer'
+          }
+        },
+          React.createElement('div',{className:'dot',style:{background:ev.color,flexShrink:0}}),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontWeight:600,fontSize:14}},ev.title),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},ev.start,' – ',ev.end)
+          ),
+          React.createElement(Icon,{name:'chevR',size:14})
+        ))
+      ),
+
+      // Tareas
+      dayTasks.length>0 && React.createElement('div',null,
+        React.createElement('div',{style:{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--red)',marginBottom:8}},'✅ Tareas que vencen hoy'),
+        dayTasks.map(t=>React.createElement('div',{
+          key:t.id,
+          style:{
+            display:'flex',alignItems:'center',gap:10,padding:'10px 12px',
+            borderRadius:10,background:'rgba(248,113,113,0.08)',marginBottom:6,
+            borderLeft:'3px solid var(--red)'
+          }
+        },
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontWeight:600,fontSize:14}},t.title),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},
+              t.subject||t.activity||t.type,' · ',t.priority
+            )
+          )
+        ))
+      )
+    )
+  );
+}
+
 function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
+  const [popup, setPopup] = useState(null); // dateStr of tapped day
   const yr=curr.getFullYear(),mo=curr.getMonth();
   const fd=new Date(yr,mo,1).getDay(),dim=new Date(yr,mo+1,0).getDate(),prev=new Date(yr,mo,0).getDate();
   const ts=todayStr(),cells=[];
   for(let i=fd-1;i>=0;i--)cells.push({day:prev-i,curr:false,date:`${yr}-${p2(mo)}-${p2(prev-i)}`});
   for(let d=1;d<=dim;d++)cells.push({day:d,curr:true,date:`${yr}-${p2(mo+1)}-${p2(d)}`});
   while(cells.length%7!==0){const nx=cells.length-fd-dim+1;cells.push({day:nx,curr:false,date:`${yr}-${p2(mo+2)}-${p2(nx)}`});}
-  return React.createElement('div',{className:'cal-wrapper'},
-    React.createElement('div',{className:'cal-grid'},
-      DAYS.map(d=>React.createElement('div',{key:d,className:'cal-day-name'},d)),
-      cells.map((c,i)=>{
-        const evs=events.filter(e=>e.date===c.date);
-        const cellDate=new Date(c.date+'T12:00:00');
-        const dayOfWeek=cellDate.getDay();
-        const subs=subjects.filter(s=>{
-          if(!isSubjectActiveOnDate(s,c.date)) return false;
-          return getSubjectSchedulesForDay(s,dayOfWeek).length>0;
-        });
-        const acts=(activities||[]).filter(a=>(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek));
-        const tasksDue=(tasks||[]).filter(t=>t.dueDate===c.date&&t.status!=='completada');
-        const items=[
-          ...subs.slice(0,1).map(s=>({label:'📚 '+s.name,color:s.color+'99'})),
-          ...acts.slice(0,1).map(a=>({label:(a.icon&&!a.icon.startsWith('__svg__')?a.icon:'🏃')+' '+a.name,color:a.color+'99'})),
-          ...tasksDue.slice(0,1).map(t=>({label:'✅ '+t.title,color:'#f8717199'})),
-          ...evs.map(ev=>({label:ev.title,color:ev.color,ev})),
-        ];
-        return React.createElement('div',{key:i,className:`cal-day${!c.curr?' other-month':''}${c.date===ts?' today':''}`,onClick:()=>onDay(c.date)},
-          React.createElement('div',{className:'cal-day-num'},c.day),
-          items.slice(0,3).map((it,idx)=>React.createElement('div',{key:idx,className:'cal-event-dot',style:{background:it.color,fontSize:9},onClick:it.ev?e=>{e.stopPropagation();onEvent(it.ev);}:undefined},it.label)),
-          items.length>3&&React.createElement('div',{style:{fontSize:10,color:'var(--text3)',marginTop:2}},'+',items.length-3,' más')
-        );
-      })
+
+  return React.createElement('div',null,
+    popup && React.createElement(DayDetailPopup,{
+      dateStr: popup,
+      events, subjects, activities, tasks,
+      onClose: ()=>setPopup(null),
+      onNewEvent: (date)=>onDay(date),
+      onEditEvent: (ev)=>onEvent(ev),
+    }),
+    React.createElement('div',{className:'cal-wrapper'},
+      React.createElement('div',{className:'cal-grid'},
+        DAYS.map(d=>React.createElement('div',{key:d,className:'cal-day-name'},d)),
+        cells.map((c,i)=>{
+          const evs=events.filter(e=>e.date===c.date);
+          const cellDate=new Date(c.date+'T12:00:00');
+          const dayOfWeek=cellDate.getDay();
+          const subs=subjects.filter(s=>{
+            if(!isSubjectActiveOnDate(s,c.date)) return false;
+            return getSubjectSchedulesForDay(s,dayOfWeek).length>0;
+          });
+          const acts=(activities||[]).filter(a=>(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek));
+          const tasksDue=(tasks||[]).filter(t=>t.dueDate===c.date&&t.status!=='completada');
+          const items=[
+            ...subs.slice(0,1).map(s=>({label:'📚 '+s.name,color:s.color+'99'})),
+            ...acts.slice(0,1).map(a=>({label:(a.icon&&!a.icon.startsWith('__svg__')?a.icon:'🏃')+' '+a.name,color:a.color+'99'})),
+            ...tasksDue.slice(0,1).map(t=>({label:'✅ '+t.title,color:'#f8717199'})),
+            ...evs.map(ev=>({label:ev.title,color:ev.color,ev})),
+          ];
+          const hasMore = subs.length+acts.length+tasksDue.length+evs.length;
+          return React.createElement('div',{
+            key:i,
+            className:`cal-day${!c.curr?' other-month':''}${c.date===ts?' today':''}`,
+            onClick:()=>setPopup(c.date)
+          },
+            React.createElement('div',{className:'cal-day-num'},c.day),
+            items.slice(0,2).map((it,idx)=>React.createElement('div',{
+              key:idx,className:'cal-event-dot',
+              style:{background:it.color,fontSize:9},
+              onClick:it.ev?e=>{e.stopPropagation();onEvent(it.ev);}:undefined
+            },it.label)),
+            hasMore>2&&React.createElement('div',{style:{
+              fontSize:9,color:'var(--text3)',marginTop:2,fontWeight:600
+            }},'+',hasMore-2,' más')
+          );
+        })
+      )
     )
   );
 }
@@ -1447,43 +1616,16 @@ function Tasks({state,setState,showToast}) {
 }
 
 // ─── HABITS ───────────────────────────────────────────────────────────────────
-function getWeekKey(date) {
-  const d = new Date(date);
-  d.setHours(0,0,0,0);
-  d.setDate(d.getDate() + 3 - (d.getDay()+6)%7);
-  const week1 = new Date(d.getFullYear(),0,4);
-  const wn = 1 + Math.round(((d-week1)/86400000 - 3 + (week1.getDay()+6)%7)/7);
-  return `${d.getFullYear()}-W${String(wn).padStart(2,'0')}`;
-}
-
 function Habits({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
   const [form,setForm]=useState({name:'',icon:'⭐'});
-  const DS_LABELS=['L','M','X','J','V','S','D'];
-  // Hoy: Mon=0 … Sun=6
-  const todayDowRaw = new Date().getDay(); // 0=Dom
-  const todayDow = todayDowRaw===0 ? 6 : todayDowRaw-1;
-  const currentWeek = getWeekKey(new Date());
-
-  // Auto-reset cada lunes: si lastWeek != currentWeek, limpia los checks
-  useEffect(()=>{
-    if(!state.habits||state.habits.length===0) return;
-    const needsReset = state.habits.some(h=>(h.lastWeek||'')!==currentWeek);
-    if(!needsReset) return;
-    setState(s=>({...s,habits:s.habits.map(h=>{
-      if((h.lastWeek||'')===currentWeek) return h;
-      const lastStreak=(h.done||[]).length>=5?(h.streak||0):0;
-      return {...h,done:[],lastWeek:currentWeek,streak:lastStreak};
-    })}));
-  },[]);
-
+  const DS=['L','M','X','J','V','S','D'];
   const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{
     if(h.id!==hid) return h;
     const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];
-    return {...h,done,lastWeek:currentWeek,streak:done.length};
+    return {...h,done,streak:done.length};
   })}));
-
   const openNew=()=>{setEditing(null);setForm({name:'',icon:'⭐'});setModal(true);};
   const openEdit=h=>{setEditing(h);setForm({name:h.name,icon:h.icon});setModal(true);};
   const save=()=>{
@@ -1492,93 +1634,49 @@ function Habits({state,setState,showToast}) {
       setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon}:h)}));
       showToast('Hábito actualizado');
     } else {
-      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,lastWeek:currentWeek}]}));
+      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0}]}));
       showToast('Hábito agregado');
     }
     setModal(false);setEditing(null);setForm({name:'',icon:'⭐'});
   };
   const del=id=>{setState(s=>({...s,habits:s.habits.filter(h=>h.id!==id)}));showToast('Hábito eliminado');};
-
-  const totH=state.habits.length*7;
-  const doneH=state.habits.reduce((a,h)=>a+(h.done||[]).length,0);
+  const totH=state.habits.length*7,doneH=state.habits.reduce((a,h)=>a+h.done.length,0);
   const wPct=Math.round(doneH/Math.max(totH,1)*100);
-
   return React.createElement('div',null,
-    // ── Header ──
     React.createElement('div',{className:'page-header'},
       React.createElement('h1',{className:'page-title'},'💚 ',React.createElement('span',null,'Hábitos')),
       React.createElement('button',{className:'btn btn-primary',onClick:openNew},React.createElement(Icon,{name:'plus',size:16}),'Hábito')
     ),
-
-    // ── Progreso semanal ──
     React.createElement('div',{className:'card',style:{marginBottom:20}},
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}},
-        React.createElement('div',{className:'card-title',style:{marginBottom:0}},'Progreso Semanal'),
-        React.createElement('div',{style:{fontSize:11,color:'var(--accent)',fontWeight:600}},'↺ Se resetea cada lunes')
-      ),
+      React.createElement('div',{className:'card-title'},'Progreso Semanal'),
       React.createElement('div',{className:'flex items-center gap-3'},
-        React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:72}},wPct+'%'),
+        React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:80}},wPct+'%'),
         React.createElement('div',{style:{flex:1}},
-          React.createElement('div',{className:'progress-bar',style:{height:10}},
-            React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})
-          ),
+          React.createElement('div',{className:'progress-bar',style:{height:10}},React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})),
           React.createElement('div',{className:'text-xs text-muted',style:{marginTop:6}},doneH,' de ',totH,' checks esta semana')
         )
       )
     ),
-
+    React.createElement('div',{style:{display:'flex',marginBottom:12,paddingLeft:220,gap:4}},DS.map(d=>React.createElement('div',{key:d,style:{width:28,textAlign:'center',fontSize:11,color:'var(--text3)',fontWeight:700}},d))),
     state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
-
-    // ── Tarjetas de hábitos — label encima del dot, grilla de 7 columnas ──
-    state.habits.map(h=>React.createElement('div',{key:h.id,className:'card',style:{marginBottom:12,padding:'16px 18px'}},
-      // Fila 1: icono + nombre + racha + botones
-      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:14}},
-        React.createElement('div',{style:{fontSize:24,flexShrink:0,cursor:'pointer'},onClick:()=>openEdit(h)},
-          renderIcon(h.icon,24)
-        ),
-        React.createElement('div',{style:{flex:1,cursor:'pointer'},onClick:()=>openEdit(h)},
-          React.createElement('div',{style:{fontSize:15,fontWeight:700,lineHeight:1.2}},h.name),
-          React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},
-            (h.done||[]).length,' días esta semana 🔥',
-            h.streak>0?` · Racha: ${h.streak}`:''
-          )
-        ),
-        React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
-          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
-          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
-        )
+    state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item'},
+      React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer'},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
+      React.createElement('div',{style:{minWidth:150,cursor:'pointer'},onClick:()=>openEdit(h)},
+        React.createElement('div',{style:{fontSize:14,fontWeight:600}},h.name),
+        React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
       ),
-      // Fila 2: grilla 7 col — label ENCIMA del cuadrado, perfectamente alineados
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6}},
-        DS_LABELS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:5}},
-          React.createElement('div',{style:{
-            fontSize:10,fontWeight:700,
-            color:i===todayDow?'var(--accent)':'var(--text3)',
-            textTransform:'uppercase'
-          }},label),
-          React.createElement('div',{
-            className:`habit-dot${(h.done||[]).includes(i)?' done':''}`,
-            style:{
-              width:'100%',maxWidth:40,height:32,borderRadius:8,
-              background:(h.done||[]).includes(i)?'var(--green)':i===todayDow?'rgba(124,106,247,0.15)':'var(--bg)',
-              border:(h.done||[]).includes(i)?'none':i===todayDow?'2px solid var(--accent)':'1px solid var(--border)',
-              display:'flex',alignItems:'center',justifyContent:'center',
-              fontSize:14,cursor:'pointer',transition:'all 0.15s',
-            },
-            onClick:()=>toggle(h.id,i)
-          },(h.done||[]).includes(i)?'✓':'')
-        ))
+      React.createElement('div',{style:{display:'flex',gap:4,flex:1}},
+        DS.map((_,i)=>React.createElement('div',{key:i,className:`habit-dot${h.done.includes(i)?' done':''}`,onClick:()=>toggle(h.id,i)},h.done.includes(i)?'✓':''))
+      ),
+      React.createElement('div',{style:{display:'flex',gap:4,marginLeft:8}},
+        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
+        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
       )
     )),
-
-    // ── Modal ──
     modal&&React.createElement(Modal,{title:editing?'Editar Hábito':'Nuevo Hábito',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement(IconPicker,{value:form.icon,onChange:ic=>setForm(f=>({...f,icon:ic})),icons:EMOJI_ICONS_HABITS,label:'Ícono'}),
-        React.createElement('div',{className:'form-group'},
-          React.createElement('label',{className:'label'},'Nombre'),
-          React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',autoFocus:true,value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})
-        ),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editing&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editing.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
