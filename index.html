@@ -239,7 +239,11 @@ const COLORS = ['#7c6af7','#22d3ee','#4ade80','#fb923c','#f472b6','#facc15','#f8
 
 const p2      = n => String(n).padStart(2,'0');
 const fmtDate = d => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
-const sameDay = (a,b) => fmtDate(new Date(a)) === fmtDate(new Date(b));
+const sameDay = (a,b) => {
+  const sa = (a instanceof Date) ? fmtDate(a) : String(a).substring(0,10);
+  const sb = (b instanceof Date) ? fmtDate(b) : String(b).substring(0,10);
+  return sa === sb;
+};
 const todayStr = () => fmtDate(new Date());
 
 const BLANK = () => ({
@@ -375,17 +379,33 @@ const NotifManager = {
     window._notifTimers = existing;
     window._notifTimers[key] = setTimeout(() => {
       if(Notification.permission==='granted') {
-        try {
-          new Notification(title, {
-            body,
-            icon: '/organizador/icons/icon-192.png',
-            badge: '/organizador/icons/icon-192.png',
-            tag: key,
-            requireInteraction: false,
-          });
-        } catch(e) { console.warn('Notif error:', e); }
+        NotifManager._send(title, body, key);
       }
     }, Math.min(delay, 2147483647));
+  },
+  async _send(title, body, tag) {
+    // Primero intentar con ServiceWorker (funciona en mobile)
+    if(navigator.serviceWorker && navigator.serviceWorker.controller) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, {
+          body, icon: '/organizador/icons/icon-192.png',
+          badge: '/organizador/icons/icon-192.png',
+          tag: tag || 'org-notif',
+          requireInteraction: false,
+        });
+        return;
+      } catch(e) { console.warn('SW notif failed:', e); }
+    }
+    // Fallback: Notification API directa (desktop)
+    try {
+      new Notification(title, {
+        body, icon: '/organizador/icons/icon-192.png',
+        badge: '/organizador/icons/icon-192.png',
+        tag: tag || 'org-notif',
+        requireInteraction: false,
+      });
+    } catch(e) { console.warn('Notif error:', e); }
   },
   cancel(id) {
     const key = 'notif_' + id;
@@ -521,13 +541,10 @@ function NotificationsPanel({state, showToast}) {
     }
   };
 
-  const testNotif = () => {
+  const testNotif = async () => {
     if(perm!=='granted') return;
     try {
-      new Notification('📋 Organizador',{
-        body: '¡Las notificaciones funcionan correctamente!',
-        icon: '/organizador/icons/icon-192.png',
-      });
+      await NotifManager._send('📋 Organizador', '¡Las notificaciones funcionan correctamente!', 'test-notif');
       showToast('Notificación de prueba enviada');
     } catch(e) { showToast('Error al enviar notificación','error'); }
   };
@@ -606,7 +623,7 @@ function NotificationsPanel({state, showToast}) {
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({state,setPage,user}) {
   const now = new Date();
-  const todayEvs = state.events.filter(e=>sameDay(e.date,now));
+  const todayEvs = state.events.filter(e=>e.date===todayStr());
   const doneT = state.tasks.filter(t=>t.status==='completada').length;
   const pendT = state.tasks.filter(t=>t.status!=='completada').length;
   const habPct = Math.round(state.habits.reduce((a,h)=>a+Math.min(h.done.length,7),0)/Math.max(state.habits.length*7,1)*100);
@@ -977,13 +994,13 @@ function Calendar({state,setState,showToast}) {
   const [curr,setCurr]=useState(new Date());
   const [modal,setModal]=useState(false);
   const [editEv,setEditEv]=useState(null);
-  const blank={title:'',category:'facultad',subject:'',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr()};
+  const blank={title:'',category:'facultad',subject:'',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr(),links:[]};
   const [form,setForm]=useState(blank);
 
   const nav=dir=>{const d=new Date(curr);if(view==='month')d.setMonth(d.getMonth()+dir);else if(view==='week')d.setDate(d.getDate()+dir*7);else d.setDate(d.getDate()+dir);setCurr(d);};
   const lbl=()=>{if(view==='month')return`${MONTHS[curr.getMonth()]} ${curr.getFullYear()}`;if(view==='week'){const s=new Date(curr);s.setDate(s.getDate()-s.getDay());const e=new Date(s);e.setDate(e.getDate()+6);return`${s.getDate()} - ${e.getDate()} ${MONTHS[s.getMonth()]}`;}return`${curr.getDate()} de ${MONTHS[curr.getMonth()]}`;};
   const openNew=(date,start)=>{setEditEv(null);setForm({...blank,date:date||todayStr(),start:start||'09:00'});setModal(true);};
-  const openEdit=ev=>{setEditEv(ev);setForm({...ev});setModal(true);};
+  const openEdit=ev=>{setEditEv(ev);setForm({...blank,...ev,links:ev.links||[]});setModal(true);};
   const save=()=>{
     if(!form.title.trim()) return;
     const sub=state.subjects.find(s=>s.name===form.subject);
@@ -1045,6 +1062,17 @@ function Calendar({state,setState,showToast}) {
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Fecha'),React.createElement('input',{className:'input',type:'date',value:form.date,onChange:F('date')})),
         !selectedSub&&React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
+        React.createElement('div',null,
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+            React.createElement('label',{className:'label'},'🔗 Links (Zoom, Meet, Drive...)'),
+            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}))},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
+          ),
+          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
+            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Ej: Zoom',value:l.label,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,label:e.target.value}:x)}))}),
+            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,url:e.target.value}:x)}))}),
+            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>setForm(f=>({...f,links:f.links.filter((_,j)=>j!==i)}))},React.createElement(Icon,{name:'x',size:13}))
+          ))
+        ),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:8}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editEv&&React.createElement('button',{className:'btn btn-danger',onClick:()=>del(editEv.id)},React.createElement(Icon,{name:'trash',size:16}))
@@ -1157,7 +1185,13 @@ function DayDetailPopup({dateStr, events, subjects, activities, tasks, onClose, 
           React.createElement('div',{className:'dot',style:{background:ev.color,flexShrink:0}}),
           React.createElement('div',{style:{flex:1}},
             React.createElement('div',{style:{fontWeight:600,fontSize:14}},ev.title),
-            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},ev.start,' – ',ev.end)
+            React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},ev.start,' – ',ev.end),
+            (ev.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{marginTop:4,display:'flex',flexWrap:'wrap',gap:4}},
+              (ev.links||[]).filter(l=>l.url).map((l,li)=>React.createElement('a',{key:li,href:l.url,target:'_blank',rel:'noopener noreferrer',
+                onClick:e=>e.stopPropagation(),
+                style:{fontSize:11,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 7px',borderRadius:8,textDecoration:'none',fontWeight:600}
+              },'🔗 '+(l.label||'Link')))
+            )
           ),
           React.createElement(Icon,{name:'chevR',size:14})
         ))
@@ -1351,7 +1385,7 @@ function SubjectScheduleEditor({schedules, onChange}) {
 function Faculty({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
-  const blankForm={name:'',color:COLORS[0],schedules:[],type:'anual',startDate:'',endDate:'',notes:''};
+  const blankForm={name:'',color:COLORS[0],schedules:[],type:'anual',startDate:'',endDate:'',notes:'',links:[]};
   const [form,setForm]=useState(blankForm);
 
   const openNew=()=>{setEditing(null);setForm(blankForm);setModal(true);};
@@ -1360,7 +1394,7 @@ function Faculty({state,setState,showToast}) {
     const schedules = s.schedules && s.schedules.length>0
       ? s.schedules
       : (s.days && s.days.length>0 ? [{days:s.days,time:s.time||'',room:s.room||''}] : []);
-    setForm({name:s.name,color:s.color,schedules,type:s.type||'anual',startDate:s.startDate||'',endDate:s.endDate||'',notes:s.notes||''});
+    setForm({name:s.name,color:s.color,schedules,type:s.type||'anual',startDate:s.startDate||'',endDate:s.endDate||'',notes:s.notes||'',links:s.links||[]});
     setModal(true);
   };
   const save=()=>{
@@ -1372,6 +1406,7 @@ function Faculty({state,setState,showToast}) {
       startDate:form.type==='anual'?'':form.startDate,
       endDate:form.type==='anual'?'':form.endDate,
       notes:form.notes||'',
+      links:form.links||[],
       id:editing?editing.id:Date.now()
     };
     setState(s=>({...s,subjects:editing?s.subjects.map(x=>x.id===editing.id?subj:x):[...s.subjects,subj]}));
@@ -1422,7 +1457,13 @@ function Faculty({state,setState,showToast}) {
               borderLeft:`3px solid ${s.color}44`,lineHeight:1.6,
               display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden',
               fontStyle:'italic'
-            }},s.notes)
+            }},s.notes),
+            (s.links||[]).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
+              (s.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',
+                onClick:e=>e.stopPropagation(),
+                style:{fontSize:11,color:s.color,background:s.color+'18',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600}
+              },'🔗 '+(l.label||'Link'+(i+1))))
+            )
           ),
           React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',flexShrink:0,marginLeft:8},onClick:e=>{e.stopPropagation();del(s.id);}},React.createElement(Icon,{name:'trash',size:14}))
         )
@@ -1455,6 +1496,17 @@ function Faculty({state,setState,showToast}) {
             style:{resize:'vertical',lineHeight:1.6,fontSize:13}
           })
         ),
+        React.createElement('div',null,
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+            React.createElement('label',{className:'label'},'🔗 Links (Zoom, Drive, Campus...)'),
+            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}))},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
+          ),
+          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
+            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,label:e.target.value}:x)}))}),
+            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,url:e.target.value}:x)}))}),
+            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>setForm(f=>({...f,links:f.links.filter((_,j)=>j!==i)}))},React.createElement(Icon,{name:'x',size:13}))
+          ))
+        ),
         React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center'},onClick:save},'Guardar Materia')
       )
     )
@@ -1465,16 +1517,20 @@ function Faculty({state,setState,showToast}) {
 function Activities({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
-  const [form,setForm]=useState({name:'',icon:'🎯',color:COLORS[2],days:[],time:''});
-  const openNew=()=>{setEditing(null);setForm({name:'',icon:'🎯',color:COLORS[2],days:[],time:''});setModal(true);};
-  const openEdit=a=>{setEditing(a);setForm({...a});setModal(true);};
+  const blankAct={name:'',icon:'🎯',color:COLORS[2],days:[],time:'',notes:'',links:[]};
+  const [form,setForm]=useState(blankAct);
+  const openNew=()=>{setEditing(null);setForm(blankAct);setModal(true);};
+  const openEdit=a=>{setEditing(a);setForm({...blankAct,...a,links:a.links||[],notes:a.notes||''});setModal(true);};
+  const addLink=()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}));
+  const updateLink=(idx,field,val)=>setForm(f=>({...f,links:f.links.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
+  const removeLink=idx=>setForm(f=>({...f,links:f.links.filter((_,i)=>i!==idx)}));
   const save=()=>{
     if(!form.name.trim()) return;
     setState(s=>({...s,activities:editing
       ?s.activities.map(x=>x.id===editing.id?{...form,id:x.id}:x)
       :[...s.activities,{...form,id:Date.now()}]
     }));
-    setModal(false);setEditing(null);setForm({name:'',icon:'🎯',color:COLORS[2],days:[],time:''});
+    setModal(false);setEditing(null);setForm(blankAct);
     showToast(editing?'Actividad actualizada':'Actividad agregada');
   };
   const del=id=>{setState(s=>({...s,activities:s.activities.filter(x=>x.id!==id)}));showToast('Eliminada');};
@@ -1487,23 +1543,45 @@ function Activities({state,setState,showToast}) {
     React.createElement('div',{className:'grid-3'},
       state.activities.map(a=>React.createElement('div',{key:a.id,className:'card',style:{borderTop:`3px solid ${a.color}`,cursor:'pointer'},onClick:()=>openEdit(a)},
         React.createElement('div',{className:'flex justify-between'},
-          React.createElement('div',null,
+          React.createElement('div',{style:{flex:1,minWidth:0}},
             React.createElement('div',{style:{fontSize:28,marginBottom:8}},typeof renderIcon(a.icon)!=='string'?renderIcon(a.icon,28):renderIcon(a.icon)),
             React.createElement('div',{style:{fontSize:15,fontWeight:700}},a.name),
             React.createElement('div',{className:'text-xs text-muted',style:{marginTop:4}},(a.days||[]).join(', ')||'Sin días'),
-            React.createElement('div',{className:'text-xs text-muted'},a.time||'Sin horario')
+            React.createElement('div',{className:'text-xs text-muted'},a.time||'Sin horario'),
+            a.notes&&React.createElement('div',{style:{marginTop:8,fontSize:12,color:'var(--text2)',background:'var(--bg3)',borderRadius:7,padding:'6px 8px',borderLeft:`2px solid ${a.color}`,lineHeight:1.5,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}},a.notes),
+            (a.links||[]).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
+              (a.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',
+                onClick:e=>e.stopPropagation(),
+                style:{fontSize:11,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600,display:'inline-flex',alignItems:'center',gap:4}
+              },'🔗 '+(l.label||l.url)))
+            )
           ),
-          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:e=>{e.stopPropagation();del(a.id);}},React.createElement(Icon,{name:'trash',size:14}))
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',flexShrink:0},onClick:e=>{e.stopPropagation();del(a.id);}},React.createElement(Icon,{name:'trash',size:14}))
         )
       ))
     ),
-    modal&&React.createElement(Modal,{title:editing?'Editar Actividad':'Nueva Actividad',onClose:()=>setModal(false)},
+    modal&&React.createElement(Modal,{title:editing?'Editar Actividad':'Nueva Actividad',onClose:()=>setModal(false),wide:true},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement(IconPicker,{value:form.icon,onChange:ic=>setForm(f=>({...f,icon:ic})),icons:EMOJI_ICONS_ACTIVITIES,label:'Ícono',showSVG:true}),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Gym',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Días'),React.createElement(DayToggle,{options:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],value:form.days,onChange:v=>setForm(f=>({...f,days:v}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Horario'),React.createElement('input',{className:'input',placeholder:'07:00-08:00',value:form.time,onChange:e=>setForm(f=>({...f,time:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'📝 Notas (opcional)'),
+          React.createElement('textarea',{className:'input',rows:3,placeholder:'Profesor, dirección, descripción...',value:form.notes||'',onChange:e=>setForm(f=>({...f,notes:e.target.value})),style:{resize:'vertical',fontSize:13}})
+        ),
+        React.createElement('div',null,
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+            React.createElement('label',{className:'label'},'🔗 Links (Zoom, Meet, Drive...)'),
+            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:addLink},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
+          ),
+          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
+            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>updateLink(i,'label',e.target.value)}),
+            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>updateLink(i,'url',e.target.value)}),
+            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>removeLink(i)},React.createElement(Icon,{name:'x',size:13}))
+          ))
+        ),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editing&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editing.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
@@ -1518,20 +1596,41 @@ function Tasks({state,setState,showToast}) {
   const [filter,setFilter]=useState('all');
   const [modal,setModal]=useState(false);
   const [editingTask,setEditingTask]=useState(null);
-  const blankForm={title:'',type:'facultad',subject:'',activity:'',dueDate:'',priority:'media',status:'pendiente',notes:''};
+  const blankForm={title:'',type:'facultad',subject:'',activity:'',dueDate:'',priority:'media',status:'pendiente',notes:'',links:[]};
   const [form,setForm]=useState(blankForm);
   const PC={alta:'var(--red)',media:'var(--yellow)',baja:'var(--green)'};
+
+  const addLink=()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}));
+  const updateLink=(idx,field,val)=>setForm(f=>({...f,links:f.links.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
+  const removeLink=idx=>setForm(f=>({...f,links:f.links.filter((_,i)=>i!==idx)}));
+
+  // Build filter options: status + type + each activity name
+  const activityNames=(state.activities||[]).map(a=>a.name);
+  const filterBtns=[
+    ['all','Todas'],
+    ['pendiente','Pendientes'],
+    ['en-progreso','En Progreso'],
+    ['completada','Completadas'],
+    ['facultad','Facultad'],
+    ['hogar','Hogar'],
+    ['personal','Personal'],
+    ['trabajo','Trabajo'],
+    ...(activityNames.length>0?[['actividades','Actividades']]:[]),
+    ...activityNames.map(n=>[n,n]),
+  ];
 
   const filtered=state.tasks.filter(t=>{
     if(filter==='all') return true;
     if(['pendiente','en-progreso','completada'].includes(filter)) return t.status===filter;
+    if(filter==='actividades') return !!t.activity;
+    if(activityNames.includes(filter)) return t.activity===filter;
     return t.type===filter;
   }).sort((a,b)=>({alta:0,media:1,baja:2}[a.priority]||1)-({alta:0,media:1,baja:2}[b.priority]||1));
 
   const toggle=id=>setState(s=>({...s,tasks:s.tasks.map(t=>t.id===id?{...t,status:t.status==='completada'?'pendiente':'completada'}:t)}));
 
   const openNew=()=>{setEditingTask(null);setForm(blankForm);setModal(true);};
-  const openEdit=t=>{setEditingTask(t);setForm({...blankForm,...t});setModal(true);};
+  const openEdit=t=>{setEditingTask(t);setForm({...blankForm,...t,links:t.links||[],notes:t.notes||''});setModal(true);};
 
   const save=()=>{
     if(!form.title.trim()) return;
@@ -1555,27 +1654,38 @@ function Tasks({state,setState,showToast}) {
       React.createElement('button',{className:'btn btn-primary',onClick:openNew},React.createElement(Icon,{name:'plus',size:16}),'Nueva')
     ),
     React.createElement('div',{className:'flex gap-2',style:{marginBottom:20,flexWrap:'wrap'}},
-      [['all','Todas'],['pendiente','Pendientes'],['en-progreso','En Progreso'],['completada','Completadas'],['facultad','Facultad'],['hogar','Hogar'],['personal','Personal']]
-      .map(([v,l])=>React.createElement('button',{key:v,className:`btn btn-sm ${filter===v?'btn-primary':'btn-ghost'}`,onClick:()=>setFilter(v)},l))
+      filterBtns.map(([v,l])=>React.createElement('button',{key:v,className:`btn btn-sm ${filter===v?'btn-primary':'btn-ghost'}`,onClick:()=>setFilter(v)},l))
     ),
     filtered.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'No hay tareas en esta categoría.'),
-    filtered.map(t=>React.createElement('div',{key:t.id,className:`task-item${t.status==='completada'?' done':''}`,style:{cursor:'default'}},
-      React.createElement('div',{className:`task-check${t.status==='completada'?' checked':''}`,onClick:()=>toggle(t.id)},t.status==='completada'&&React.createElement('span',{style:{color:'white',fontSize:12}},'✓')),
-      React.createElement('div',{className:'task-title'},t.title),
-      React.createElement('div',{className:'task-meta'},
-        React.createElement('div',{className:'badge',style:{background:PC[t.priority]+'22',color:PC[t.priority]}},t.priority),
-        t.subject&&React.createElement('div',{className:'badge',style:{background:'var(--accent-glow)',color:'var(--accent)'}},t.subject),
-        t.activity&&React.createElement('div',{className:'badge',style:{background:'rgba(251,146,60,0.15)',color:'#fb923c'}},t.activity),
-        t.dueDate&&React.createElement('span',{className:'text-xs text-muted'},t.dueDate),
-        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},title:'Editar',onClick:()=>openEdit(t)},React.createElement(Icon,{name:'edit',size:12})),
-        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},onClick:()=>del(t.id)},React.createElement(Icon,{name:'trash',size:12}))
+    filtered.map(t=>React.createElement('div',{key:t.id,className:`task-item${t.status==='completada'?' done':''}`,style:{cursor:'default',flexDirection:'column',alignItems:'flex-start',gap:8}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:12,width:'100%'}},
+        React.createElement('div',{className:`task-check${t.status==='completada'?' checked':''}`,onClick:()=>toggle(t.id)},t.status==='completada'&&React.createElement('span',{style:{color:'white',fontSize:12}},'✓')),
+        React.createElement('div',{className:'task-title',style:{flex:1}},t.title),
+        React.createElement('div',{className:'task-meta'},
+          React.createElement('div',{className:'badge',style:{background:PC[t.priority]+'22',color:PC[t.priority]}},t.priority),
+          t.subject&&React.createElement('div',{className:'badge',style:{background:'var(--accent-glow)',color:'var(--accent)'}},t.subject),
+          t.activity&&React.createElement('div',{className:'badge',style:{background:'rgba(251,146,60,0.15)',color:'#fb923c'}},t.activity),
+          t.dueDate&&React.createElement('span',{className:'text-xs text-muted'},t.dueDate),
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},title:'Editar',onClick:()=>openEdit(t)},React.createElement(Icon,{name:'edit',size:12})),
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',width:28,height:28},onClick:()=>del(t.id)},React.createElement(Icon,{name:'trash',size:12}))
+        )
+      ),
+      t.notes&&React.createElement('div',{style:{marginLeft:32,fontSize:12,color:'var(--text2)',background:'var(--bg)',borderRadius:7,padding:'6px 10px',borderLeft:'2px solid var(--border)',lineHeight:1.5,width:'calc(100% - 32px)'}},t.notes),
+      (t.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{marginLeft:32,display:'flex',flexWrap:'wrap',gap:4}},
+        (t.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',
+          style:{fontSize:11,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600}
+        },'🔗 '+(l.label||'Link'+(i+1))))
       )
     )),
-    modal&&React.createElement(Modal,{title:editingTask?'Editar Tarea':'Nueva Tarea',onClose:()=>setModal(false)},
+    modal&&React.createElement(Modal,{title:editingTask?'Editar Tarea':'Nueva Tarea',onClose:()=>setModal(false),wide:true},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título'),React.createElement('input',{className:'input',placeholder:'Ej: TP de Algoritmos',value:form.title,onChange:F('title'),autoFocus:true})),
         React.createElement('div',{className:'grid-2',style:{gap:12}},
-          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Tipo'),React.createElement('select',{className:'input select',value:form.type,onChange:F('type')},['facultad','hogar','personal','trabajo'].map(t=>React.createElement('option',{key:t,value:t},t)))),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Tipo'),
+            React.createElement('select',{className:'input select',value:form.type,onChange:F('type')},
+              ['facultad','actividad','hogar','personal','trabajo'].map(t=>React.createElement('option',{key:t,value:t},t))
+            )
+          ),
           React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Prioridad'),React.createElement('select',{className:'input select',value:form.priority,onChange:F('priority')},['alta','media','baja'].map(p=>React.createElement('option',{key:p,value:p},p))))
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Estado'),
@@ -1603,8 +1713,19 @@ function Tasks({state,setState,showToast}) {
           )
         ),
         React.createElement('div',{className:'form-group'},
-          React.createElement('label',{className:'label'},'Notas (opcional)'),
+          React.createElement('label',{className:'label'},'📝 Notas (opcional)'),
           React.createElement('textarea',{className:'input',rows:2,placeholder:'Notas adicionales...',value:form.notes||'',onChange:F('notes'),style:{resize:'vertical'}})
+        ),
+        React.createElement('div',null,
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+            React.createElement('label',{className:'label'},'🔗 Links (opcional)'),
+            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:addLink},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
+          ),
+          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
+            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>updateLink(i,'label',e.target.value)}),
+            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>updateLink(i,'url',e.target.value)}),
+            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>removeLink(i)},React.createElement(Icon,{name:'x',size:13}))
+          ))
         ),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar Tarea'),
