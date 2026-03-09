@@ -239,6 +239,18 @@ const COLORS = ['#7c6af7','#22d3ee','#4ade80','#fb923c','#f472b6','#facc15','#f8
 
 const p2      = n => String(n).padStart(2,'0');
 const fmtDate = d => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+// Devuelve una clave única por semana: "YYYY-Www" (semana ISO, lunes como inicio)
+const getWeekKey = d => {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  // Ajustar al lunes de esa semana
+  const day = date.getUTCDay() || 7; // Dom=7
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+};
+// DS: etiquetas de días para hábitos (Lun-Dom, índice 0-6)
+const DS = ['L','M','X','J','V','S','D'];
 const sameDay = (a,b) => {
   const sa = (a instanceof Date) ? fmtDate(a) : String(a).substring(0,10);
   const sb = (b instanceof Date) ? fmtDate(b) : String(b).substring(0,10);
@@ -792,6 +804,8 @@ function buildWeekDayBlocks(subjects, activities, events, tasks, dayI, dateStr) 
 
   (activities||[]).forEach(a => {
     if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayI)) return;
+    if(a.startDate && dateStr < a.startDate) return;
+    if(a.endDate && dateStr > a.endDate) return;
     const t = parseSubjectTime(a.time);
     if(!t) return;
     const topFrac = ((t.startH + t.startM/60) - START_H) / TOTAL_H;
@@ -1094,7 +1108,12 @@ function DayDetailPopup({dateStr, events, subjects, activities, tasks, onClose, 
     if(!isSubjectActiveOnDate(s, dateStr)) return false;
     return getSubjectSchedulesForDay(s, dayOfWeek).length > 0;
   });
-  const acts = (activities||[]).filter(a=>(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek));
+  const acts = (activities||[]).filter(a=>{
+    if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek)) return false;
+    if(a.startDate && dateStr < a.startDate) return false;
+    if(a.endDate && dateStr > a.endDate) return false;
+    return true;
+  });
   const dayEvs = (events||[]).filter(e=>e.date===dateStr);
   const dayTasks = (tasks||[]).filter(t=>t.dueDate===dateStr&&t.status!=='completada');
 
@@ -1248,7 +1267,12 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
             if(!isSubjectActiveOnDate(s,c.date)) return false;
             return getSubjectSchedulesForDay(s,dayOfWeek).length>0;
           });
-          const acts=(activities||[]).filter(a=>(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek));
+          const acts=(activities||[]).filter(a=>{
+            if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayOfWeek)) return false;
+            if(a.startDate && c.date < a.startDate) return false;
+            if(a.endDate && c.date > a.endDate) return false;
+            return true;
+          });
           const tasksDue=(tasks||[]).filter(t=>t.dueDate===c.date&&t.status!=='completada');
           const items=[
             ...subs.slice(0,1).map(s=>({label:'📚 '+s.name,color:s.color+'99'})),
@@ -1324,7 +1348,7 @@ function DayView({curr,events,subjects,activities,tasks,onEvent,onSlot}) {
         React.createElement('div',{className:'week-slot',onClick:()=>onSlot&&onSlot(ds,`${p2(h)}:00`)},
           subjects.filter(sub=>{if(!isSubjectActiveOnDate(sub,ds))return false;return getSubjectSchedulesForDay(sub,dayI).some(sch=>{const t=parseSubjectTime(sch.time);return t&&t.startH===h;});})
             .flatMap(sub=>getSubjectSchedulesForDay(sub,dayI).filter(sch=>{const t=parseSubjectTime(sch.time);return t&&t.startH===h;}).map((sch,idx)=>{const t=parseSubjectTime(sch.time);const durH=(t.endH+t.endM/60)-(t.startH+t.startM/60);return React.createElement('div',{key:sub.id+idx,className:'week-event',style:{background:sub.color,height:Math.max(durH*40-2,20),top:0,fontSize:10},onClick:e=>e.stopPropagation()},'📚 '+sub.name+(sch.room?' · '+sch.room:''));})),
-          (activities||[]).filter(a=>{if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayI))return false;const t=parseSubjectTime(a.time);return t&&t.startH===h;})
+          (activities||[]).filter(a=>{if(!(a.days||[]).some(sd=>DAY_IDX[sd]===dayI))return false;if(a.startDate&&ds<a.startDate)return false;if(a.endDate&&ds>a.endDate)return false;const t=parseSubjectTime(a.time);return t&&t.startH===h;})
             .map(a=>{const t=parseSubjectTime(a.time);const durH=t?(t.endH+t.endM/60)-(t.startH+t.startM/60):1;return React.createElement('div',{key:a.id,className:'week-event',style:{background:a.color,height:Math.max(durH*40-2,20),top:0,fontSize:10},onClick:e=>e.stopPropagation()},(a.icon&&!a.icon.startsWith('__svg__')?a.icon:'🏃')+' '+a.name);}),
           dayEvs.filter(e=>{
             const eStartH=Number((e.start||'0').split(':')[0]);
@@ -1517,7 +1541,7 @@ function Faculty({state,setState,showToast}) {
 function Activities({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
-  const blankAct={name:'',icon:'🎯',color:COLORS[2],days:[],time:'',notes:'',links:[]};
+  const blankAct={name:'',icon:'🎯',color:COLORS[2],days:[],time:'',startDate:'',endDate:'',notes:'',links:[]};
   const [form,setForm]=useState(blankAct);
   const openNew=()=>{setEditing(null);setForm(blankAct);setModal(true);};
   const openEdit=a=>{setEditing(a);setForm({...blankAct,...a,links:a.links||[],notes:a.notes||''});setModal(true);};
@@ -1548,6 +1572,9 @@ function Activities({state,setState,showToast}) {
             React.createElement('div',{style:{fontSize:15,fontWeight:700}},a.name),
             React.createElement('div',{className:'text-xs text-muted',style:{marginTop:4}},(a.days||[]).join(', ')||'Sin días'),
             React.createElement('div',{className:'text-xs text-muted'},a.time||'Sin horario'),
+            (a.startDate||a.endDate)&&React.createElement('div',{style:{fontSize:11,color:'var(--cyan)',marginTop:3}},
+              a.startDate&&a.endDate?`📆 ${a.startDate} → ${a.endDate}`:a.startDate?`📆 Desde ${a.startDate}`:`📆 Hasta ${a.endDate}`
+            ),
             a.notes&&React.createElement('div',{style:{marginTop:8,fontSize:12,color:'var(--text2)',background:'var(--bg3)',borderRadius:7,padding:'6px 8px',borderLeft:`2px solid ${a.color}`,lineHeight:1.5,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}},a.notes),
             (a.links||[]).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
               (a.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',
@@ -1566,6 +1593,16 @@ function Activities({state,setState,showToast}) {
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Gym',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Días'),React.createElement(DayToggle,{options:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],value:form.days,onChange:v=>setForm(f=>({...f,days:v}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Horario'),React.createElement('input',{className:'input',placeholder:'07:00-08:00',value:form.time,onChange:e=>setForm(f=>({...f,time:e.target.value}))})),
+        React.createElement('div',{className:'grid-2',style:{gap:12}},
+          React.createElement('div',{className:'form-group'},
+            React.createElement('label',{className:'label'},'Fecha inicio (opcional)'),
+            React.createElement('input',{className:'input',type:'date',value:form.startDate||'',onChange:e=>setForm(f=>({...f,startDate:e.target.value}))})
+          ),
+          React.createElement('div',{className:'form-group'},
+            React.createElement('label',{className:'label'},'Fecha fin (opcional)'),
+            React.createElement('input',{className:'input',type:'date',value:form.endDate||'',onChange:e=>setForm(f=>({...f,endDate:e.target.value}))})
+          )
+        ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'📝 Notas (opcional)'),
@@ -1741,7 +1778,23 @@ function Habits({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
   const [form,setForm]=useState({name:'',icon:'⭐'});
-  const DS=['L','M','X','J','V','S','D'];
+  const DS_LABELS=['L','M','X','J','V','S','D'];
+  // Hoy: Mon=0 … Sun=6
+  const todayDowRaw = new Date().getDay(); // 0=Dom
+  const todayDow = todayDowRaw===0 ? 6 : todayDowRaw-1;
+  const currentWeek = getWeekKey(new Date());
+
+  // Auto-reset cada lunes: si lastWeek != currentWeek, limpia los checks
+  useEffect(()=>{
+    if(!state.habits||state.habits.length===0) return;
+    const needsReset = state.habits.some(h=>(h.lastWeek||'')!==currentWeek);
+    if(!needsReset) return;
+    setState(s=>({...s,habits:s.habits.map(h=>{
+      if((h.lastWeek||'')===currentWeek) return h;
+      const lastStreak=(h.done||[]).length>=5?(h.streak||0):0;
+      return {...h,done:[],lastWeek:currentWeek,streak:lastStreak};
+    })}));
+  },[]);
   const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{
     if(h.id!==hid) return h;
     const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];
