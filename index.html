@@ -136,8 +136,6 @@
 
   /* ── HABITS ── */
   .habit-item{display:flex;align-items:center;gap:12px;padding:16px;border-radius:var(--radius-sm);background:var(--bg3);margin-bottom:8px;flex-wrap:wrap;}
-  .habit-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;width:100%;}
-  @media(max-width:480px){.habit-days{grid-template-columns:repeat(4,1fr);}}
   .habit-dot{width:28px;height:28px;border-radius:7px;background:var(--bg);border:1px solid var(--border);cursor:pointer;transition:all var(--transition);font-size:13px;display:flex;align-items:center;justify-content:center;}
   .habit-dot.done{background:var(--green);border-color:var(--green);color:#fff;}
 
@@ -1831,20 +1829,29 @@ function Habits({state,setState,showToast}) {
         )
       )
     ),
-    React.createElement('div',{style:{display:'flex',marginBottom:12,paddingLeft:220,gap:4}},DS.map(d=>React.createElement('div',{key:d,style:{width:28,textAlign:'center',fontSize:11,color:'var(--text3)',fontWeight:700}},d))),
     state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
-    state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item'},
-      React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer'},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
-      React.createElement('div',{style:{minWidth:150,cursor:'pointer'},onClick:()=>openEdit(h)},
-        React.createElement('div',{style:{fontSize:14,fontWeight:600}},h.name),
-        React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
+    state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item',style:{flexDirection:'column',alignItems:'stretch',gap:10}},
+      // ── Fila superior: icono + nombre + botones ──
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
+        React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer',flexShrink:0},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
+        React.createElement('div',{style:{flex:1,cursor:'pointer',minWidth:0},onClick:()=>openEdit(h)},
+          React.createElement('div',{style:{fontSize:14,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},h.name),
+          React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
+        ),
+        React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
+          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+        )
       ),
-      React.createElement('div',{style:{display:'flex',gap:4,flex:1}},
-        DS.map((_,i)=>React.createElement('div',{key:i,className:`habit-dot${h.done.includes(i)?' done':''}`,onClick:()=>toggle(h.id,i)},h.done.includes(i)?'✓':''))
-      ),
-      React.createElement('div',{style:{display:'flex',gap:4,marginLeft:8}},
-        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
-        React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+      // ── Fila inferior: labels + dots en columnas alineadas ──
+      React.createElement('div',{style:{display:'flex',gap:4}},
+        DS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:28,flexShrink:0}},
+          React.createElement('div',{style:{fontSize:9,fontWeight:700,color:h.done.includes(i)?'var(--green)':'var(--text3)',letterSpacing:'0.3px',lineHeight:1}},label),
+          React.createElement('div',{
+            className:`habit-dot${h.done.includes(i)?' done':''}`,
+            onClick:()=>toggle(h.id,i)
+          },h.done.includes(i)?'✓':'')
+        ))
       )
     )),
     modal&&React.createElement(Modal,{title:editing?'Editar Hábito':'Nuevo Hábito',onClose:()=>setModal(false)},
