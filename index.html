@@ -1788,23 +1788,28 @@ function Habits({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
   const [form,setForm]=useState({name:'',icon:'⭐'});
-  const DS_LABELS=['L','M','X','J','V','S','D'];
-  // Hoy: Mon=0 … Sun=6
-  const todayDowRaw = new Date().getDay(); // 0=Dom
-  const todayDow = todayDowRaw===0 ? 6 : todayDowRaw-1;
+  const [activeTab,setActiveTab]=useState('semana'); // 'semana' | 'historial' | 'analisis'
   const currentWeek = getWeekKey(new Date());
 
-  // Auto-reset cada lunes: si lastWeek != currentWeek, limpia los checks
+  // Auto-reset cada semana: guarda historial antes de limpiar
   useEffect(()=>{
     if(!state.habits||state.habits.length===0) return;
     const needsReset = state.habits.some(h=>(h.lastWeek||'')!==currentWeek);
     if(!needsReset) return;
     setState(s=>({...s,habits:s.habits.map(h=>{
       if((h.lastWeek||'')===currentWeek) return h;
+      // Guardar semana anterior en historial
+      const hist = h.history || [];
+      if((h.lastWeek||'') && h.done && h.done.length>0) {
+        hist.push({week: h.lastWeek, done: h.done.length, total: 7});
+      }
+      // Mantener solo las últimas 12 semanas
+      const trimHist = hist.slice(-12);
       const lastStreak=(h.done||[]).length>=5?(h.streak||0):0;
-      return {...h,done:[],lastWeek:currentWeek,streak:lastStreak};
+      return {...h,done:[],lastWeek:currentWeek,streak:lastStreak,history:trimHist};
     })}));
   },[]);
+
   const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{
     if(h.id!==hid) return h;
     const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];
@@ -1818,19 +1823,57 @@ function Habits({state,setState,showToast}) {
       setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon}:h)}));
       showToast('Hábito actualizado');
     } else {
-      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0}]}));
+      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,history:[]}]}));
       showToast('Hábito agregado');
     }
     setModal(false);setEditing(null);setForm({name:'',icon:'⭐'});
   };
   const del=id=>{setState(s=>({...s,habits:s.habits.filter(h=>h.id!==id)}));showToast('Hábito eliminado');};
+
   const totH=state.habits.length*7,doneH=state.habits.reduce((a,h)=>a+h.done.length,0);
   const wPct=Math.round(doneH/Math.max(totH,1)*100);
+
+  // Análisis: calcular promedio por hábito con su historial
+  const getHabitStats=(h)=>{
+    const hist = h.history||[];
+    const allWeeks = [...hist, {week:currentWeek,done:h.done.length,total:7}];
+    if(allWeeks.length===0) return {avg:0,best:0,total:0,weeks:0};
+    const avg = Math.round(allWeeks.reduce((s,w)=>s+w.done,0)/allWeeks.length*10)/10;
+    const best = Math.max(...allWeeks.map(w=>w.done));
+    const total = allWeeks.reduce((s,w)=>s+w.done,0);
+    return {avg,best,total,weeks:allWeeks.length};
+  };
+
+  // Historial: mostrar últimas N semanas de todos los hábitos combinados
+  const getAllWeekKeys=()=>{
+    const keys=new Set([currentWeek]);
+    state.habits.forEach(h=>(h.history||[]).forEach(e=>keys.add(e.week)));
+    return [...keys].sort().reverse().slice(0,8);
+  };
+  const weekKeys = getAllWeekKeys();
+
+  // Formato legible de week key YYYY-Www
+  const fmtWeek=(wk)=>{
+    if(!wk) return '';
+    const [yr,wn]=wk.split('-W');
+    return `Sem ${wn} / ${yr}`;
+  };
+
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},
       React.createElement('h1',{className:'page-title'},'💚 ',React.createElement('span',null,'Hábitos')),
       React.createElement('button',{className:'btn btn-primary',onClick:openNew},React.createElement(Icon,{name:'plus',size:16}),'Hábito')
     ),
+
+    // ── Tabs ──
+    React.createElement('div',{className:'tabs',style:{marginBottom:20,maxWidth:360}},
+      [['semana','Esta Semana'],['historial','Historial'],['analisis','Análisis']].map(([v,l])=>
+        React.createElement('button',{key:v,className:`tab${activeTab===v?' active':''}`,onClick:()=>setActiveTab(v)},l)
+      )
+    ),
+
+    // ══ TAB: SEMANA ACTUAL ══
+    activeTab==='semana'&&React.createElement('div',null,
     React.createElement('div',{className:'card',style:{marginBottom:20}},
       React.createElement('div',{className:'card-title'},'Progreso Semanal'),
       React.createElement('div',{className:'flex items-center gap-3'},
@@ -1843,7 +1886,6 @@ function Habits({state,setState,showToast}) {
     ),
     state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
     state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item',style:{flexDirection:'column',alignItems:'stretch',gap:10}},
-      // ── Fila superior: icono + nombre + botones ──
       React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
         React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer',flexShrink:0},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
         React.createElement('div',{style:{flex:1,cursor:'pointer',minWidth:0},onClick:()=>openEdit(h)},
@@ -1855,7 +1897,6 @@ function Habits({state,setState,showToast}) {
           React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
         )
       ),
-      // ── Fila inferior: labels + dots en columnas alineadas ──
       React.createElement('div',{style:{display:'flex',gap:4}},
         DS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:28,flexShrink:0}},
           React.createElement('div',{style:{fontSize:9,fontWeight:700,color:h.done.includes(i)?'var(--green)':'var(--text3)',letterSpacing:'0.3px',lineHeight:1}},label),
@@ -1865,7 +1906,122 @@ function Habits({state,setState,showToast}) {
           },h.done.includes(i)?'✓':'')
         ))
       )
-    )),
+      ))
+    ),
+
+    // ══ TAB: HISTORIAL ══
+    activeTab==='historial'&&React.createElement('div',null,
+      state.habits.length===0
+        ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Sin hábitos cargados aún.')
+        : weekKeys.length<=1&&state.habits.every(h=>!(h.history&&h.history.length>0))
+          ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},
+              React.createElement('div',{style:{fontSize:32,marginBottom:12}},'📅'),
+              React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'El historial se acumula con el tiempo'),
+              React.createElement('div',{style:{fontSize:13}},'Cada semana, al hacer el reseteo automático, se guarda aquí tu progreso anterior.')
+            )
+          : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:12}},
+              weekKeys.map(wk=>React.createElement('div',{key:wk,className:'card',style:{padding:20}},
+                React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}},
+                  React.createElement('div',{style:{fontWeight:700,fontSize:15}},fmtWeek(wk)),
+                  wk===currentWeek&&React.createElement('div',{style:{fontSize:11,color:'var(--accent)',fontWeight:700,background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10}},'Esta semana')
+                ),
+                state.habits.map(h=>{
+                  let doneCount=0;
+                  if(wk===currentWeek) {doneCount=h.done.length;}
+                  else {const entry=(h.history||[]).find(e=>e.week===wk);doneCount=entry?entry.done:null;}
+                  if(doneCount===null) return null;
+                  const pct=Math.round(doneCount/7*100);
+                  return React.createElement('div',{key:h.id,style:{marginBottom:10}},
+                    React.createElement('div',{className:'flex justify-between',style:{marginBottom:5}},
+                      React.createElement('span',{style:{fontSize:13,display:'flex',alignItems:'center',gap:6}},renderIcon(h.icon,13),' ',h.name),
+                      React.createElement('span',{style:{fontSize:12,color:pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)',fontWeight:700}},doneCount,'/7')
+                    ),
+                    React.createElement('div',{className:'progress-bar',style:{height:5}},
+                      React.createElement('div',{className:'progress-fill',style:{width:pct+'%',background:pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)'}})
+                    )
+                  );
+                }).filter(Boolean)
+              ))
+            )
+    ),
+
+    // ══ TAB: ANÁLISIS ══
+    activeTab==='analisis'&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:16}},
+      state.habits.length===0
+        ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Sin hábitos cargados aún.')
+        : React.createElement(React.Fragment,null,
+            // Resumen global
+            React.createElement('div',{className:'grid-3',style:{gap:16}},
+              React.createElement('div',{className:'stat-card'},
+                React.createElement('div',{className:'stat-num',style:{color:'var(--green)'}},wPct+'%'),
+                React.createElement('div',{className:'stat-label'},'Esta semana'),
+                React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'checks realizados')
+              ),
+              React.createElement('div',{className:'stat-card'},
+                React.createElement('div',{className:'stat-num',style:{color:'var(--accent)'}},Math.max(...state.habits.map(h=>h.streak||0))+'🔥'),
+                React.createElement('div',{className:'stat-label'},'Mejor racha'),
+                React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'días seguidos')
+              ),
+              React.createElement('div',{className:'stat-card'},
+                React.createElement('div',{className:'stat-num',style:{color:'var(--cyan)'}},weekKeys.length),
+                React.createElement('div',{className:'stat-label'},'Semanas registradas'),
+                React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'en historial')
+              )
+            ),
+            // Detalle por hábito
+            React.createElement('div',{className:'card'},
+              React.createElement('div',{className:'card-title'},'Detalle por hábito'),
+              state.habits.map(h=>{
+                const stats=getHabitStats(h);
+                const allWeeks=[...(h.history||[]),{week:currentWeek,done:h.done.length,total:7}].slice(-8);
+                return React.createElement('div',{key:h.id,style:{marginBottom:24,paddingBottom:20,borderBottom:'1px solid var(--border)'}},
+                  React.createElement('div',{className:'flex items-center gap-2',style:{marginBottom:10}},
+                    React.createElement('span',{style:{fontSize:20}},renderIcon(h.icon,20)),
+                    React.createElement('span',{style:{fontWeight:700,fontSize:15}},h.name),
+                    React.createElement('span',{style:{marginLeft:'auto',fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
+                  ),
+                  // Mini stats chips
+                  React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
+                    React.createElement('div',{style:{background:'var(--bg3)',borderRadius:8,padding:'5px 12px',fontSize:12}},
+                      React.createElement('span',{style:{color:'var(--text3)'}},'Promedio: '),
+                      React.createElement('span',{style:{fontWeight:700,color:'var(--accent)'}},stats.avg,'/7')
+                    ),
+                    React.createElement('div',{style:{background:'var(--bg3)',borderRadius:8,padding:'5px 12px',fontSize:12}},
+                      React.createElement('span',{style:{color:'var(--text3)'}},'Mejor semana: '),
+                      React.createElement('span',{style:{fontWeight:700,color:'var(--green)'}},stats.best,'/7')
+                    ),
+                    React.createElement('div',{style:{background:'var(--bg3)',borderRadius:8,padding:'5px 12px',fontSize:12}},
+                      React.createElement('span',{style:{color:'var(--text3)'}},'Total días: '),
+                      React.createElement('span',{style:{fontWeight:700,color:'var(--cyan)'}},stats.total)
+                    )
+                  ),
+                  // Mini bar chart (últimas 8 semanas)
+                  React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:4,height:48}},
+                    allWeeks.map((w,wi)=>{
+                      const h_pct=w.done/7;
+                      const color=h_pct>=0.7?'var(--green)':h_pct>=0.4?'var(--yellow)':'var(--red)';
+                      return React.createElement('div',{key:wi,style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
+                        React.createElement('div',{style:{
+                          width:'100%',height:Math.max(h_pct*40,3),
+                          background:color,borderRadius:'3px 3px 0 0',
+                          opacity:w.week===currentWeek?1:0.65,
+                          transition:'height 0.4s'
+                        }}),
+                        React.createElement('div',{style:{fontSize:8,color:'var(--text3)',textAlign:'center',lineHeight:1}},w.done)
+                      );
+                    })
+                  ),
+                  React.createElement('div',{style:{display:'flex',gap:4,marginTop:3}},
+                    allWeeks.map((w,wi)=>React.createElement('div',{key:wi,style:{flex:1,fontSize:7,color:'var(--text3)',textAlign:'center',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}},
+                      w.week===currentWeek?'hoy':fmtWeek(w.week).replace('Sem ','S')
+                    ))
+                  )
+                );
+              })
+            )
+          )
+    ),
+
     modal&&React.createElement(Modal,{title:editing?'Editar Hábito':'Nuevo Hábito',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement(IconPicker,{value:form.icon,onChange:ic=>setForm(f=>({...f,icon:ic})),icons:EMOJI_ICONS_HABITS,label:'Ícono'}),
