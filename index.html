@@ -260,7 +260,8 @@ const sameDay = (a,b) => {
 const todayStr = () => fmtDate(new Date());
 
 const BLANK = () => ({
-  theme:'dark', subjects:[], activities:[], tasks:[], habits:[], events:[], notes:[]
+  theme:'dark', subjects:[], activities:[], tasks:[], habits:[], events:[], notes:[],
+  gym:{routines:[],logs:[],exercises:[]}
 });
 
 const firebaseError = (code) => {
@@ -294,6 +295,7 @@ const IP = {
   trash:'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
   logout:'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9',
   chevR:'M9 18l6-6-6-6', chevL:'M15 18l-6-6 6-6',
+  gym:'M6.5 6.5h11M6.5 17.5h11M4 10h16M4 14h16M2 12h2M20 12h2',
   user:'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z',
   edit:'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
   bell:'M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0',
@@ -1874,38 +1876,38 @@ function Habits({state,setState,showToast}) {
 
     // ══ TAB: SEMANA ACTUAL ══
     activeTab==='semana'&&React.createElement('div',null,
-    React.createElement('div',{className:'card',style:{marginBottom:20}},
-      React.createElement('div',{className:'card-title'},'Progreso Semanal'),
-      React.createElement('div',{className:'flex items-center gap-3'},
-        React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:80}},wPct+'%'),
-        React.createElement('div',{style:{flex:1}},
-          React.createElement('div',{className:'progress-bar',style:{height:10}},React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})),
-          React.createElement('div',{className:'text-xs text-muted',style:{marginTop:6}},doneH,' de ',totH,' checks esta semana')
-        )
-      )
-    ),
-    state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
-    state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item',style:{flexDirection:'column',alignItems:'stretch',gap:10}},
-      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
-        React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer',flexShrink:0},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
-        React.createElement('div',{style:{flex:1,cursor:'pointer',minWidth:0},onClick:()=>openEdit(h)},
-          React.createElement('div',{style:{fontSize:14,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},h.name),
-          React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
-        ),
-        React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
-          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
-          React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+      React.createElement('div',{className:'card',style:{marginBottom:20}},
+        React.createElement('div',{className:'card-title'},'Progreso Semanal'),
+        React.createElement('div',{className:'flex items-center gap-3'},
+          React.createElement('div',{style:{fontSize:36,fontWeight:800,color:'var(--green)',fontFamily:'var(--mono)',minWidth:80}},wPct+'%'),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{className:'progress-bar',style:{height:10}},React.createElement('div',{className:'progress-fill',style:{width:wPct+'%',background:'var(--green)'}})),
+            React.createElement('div',{className:'text-xs text-muted',style:{marginTop:6}},doneH,' de ',totH,' checks esta semana')
+          )
         )
       ),
-      React.createElement('div',{style:{display:'flex',gap:4}},
-        DS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:28,flexShrink:0}},
-          React.createElement('div',{style:{fontSize:9,fontWeight:700,color:h.done.includes(i)?'var(--green)':'var(--text3)',letterSpacing:'0.3px',lineHeight:1}},label),
-          React.createElement('div',{
-            className:`habit-dot${h.done.includes(i)?' done':''}`,
-            onClick:()=>toggle(h.id,i)
-          },h.done.includes(i)?'✓':'')
-        ))
-      )
+      state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño. ¡La constancia hace la diferencia!'),
+      state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item',style:{flexDirection:'column',alignItems:'stretch',gap:10}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
+          React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer',flexShrink:0},onClick:()=>openEdit(h)},renderIcon(h.icon,22)),
+          React.createElement('div',{style:{flex:1,cursor:'pointer',minWidth:0},onClick:()=>openEdit(h)},
+            React.createElement('div',{style:{fontSize:14,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},h.name),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
+          ),
+          React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
+            React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
+            React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+          )
+        ),
+        React.createElement('div',{style:{display:'flex',gap:4}},
+          DS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:28,flexShrink:0}},
+            React.createElement('div',{style:{fontSize:9,fontWeight:700,color:h.done.includes(i)?'var(--green)':'var(--text3)',letterSpacing:'0.3px',lineHeight:1}},label),
+            React.createElement('div',{
+              className:`habit-dot${h.done.includes(i)?' done':''}`,
+              onClick:()=>toggle(h.id,i)
+            },h.done.includes(i)?'✓':'')
+          ))
+        )
       ))
     ),
 
@@ -2029,6 +2031,308 @@ function Habits({state,setState,showToast}) {
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editing&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editing.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
+        )
+      )
+    )
+  );
+}
+
+// ─── GYM ─────────────────────────────────────────────────────────────────────
+const GYM_MUSCLE_GROUPS = ['Pecho','Espalda','Piernas','Hombros','Bíceps','Tríceps','Abdomen','Glúteos','Pantorrillas','Full Body','Cardio','Otro'];
+const GYM_DAYS_LABELS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+function Gym({state,setState,showToast}) {
+  const [tab,setTab] = useState('rutina'); // 'rutina' | 'historial' | 'ejercicios'
+  const [modalRoutine,setModalRoutine] = useState(false);
+  const [modalLog,setModalLog] = useState(null); // day index 0-6
+  const [modalExercise,setModalExercise] = useState(false);
+  const [editRoutine,setEditRoutine] = useState(null);
+  const [editExercise,setEditExercise] = useState(null);
+  const [logForm,setLogForm] = useState({note:'',exercises:[]});
+
+  const gym = state.gym || {routines:[],logs:[],exercises:[]};
+  const setGym = fn => setState(s=>({...s,gym:typeof fn==='function'?fn(s.gym||{routines:[],logs:[],exercises:[]}):fn}));
+
+  // ── Rutinas ──
+  const blankRoutine = {name:'',day:'',muscles:[],exercises:[],notes:''};
+  const [routineForm,setRoutineForm] = useState(blankRoutine);
+
+  const openNewRoutine = (day='') => {setEditRoutine(null);setRoutineForm({...blankRoutine,day});setModalRoutine(true);};
+  const openEditRoutine = r => {setEditRoutine(r);setRoutineForm({...blankRoutine,...r});setModalRoutine(true);};
+  const saveRoutine = () => {
+    if(!routineForm.name.trim()) return;
+    const item = {...routineForm,id:editRoutine?editRoutine.id:Date.now()};
+    setGym(g=>({...g,routines:editRoutine?g.routines.map(r=>r.id===editRoutine.id?item:r):[...g.routines,item]}));
+    setModalRoutine(false);setEditRoutine(null);setRoutineForm(blankRoutine);
+    showToast(editRoutine?'Rutina actualizada':'Rutina agregada');
+  };
+  const delRoutine = id => {setGym(g=>({...g,routines:g.routines.filter(r=>r.id!==id)}));showToast('Rutina eliminada');};
+
+  // ── Log de entrenamientos ──
+  const todayStr2 = fmtDate(new Date());
+  const openLog = (date) => {
+    const existing = (gym.logs||[]).find(l=>l.date===date);
+    setLogForm(existing?{...existing}:{note:'',exercises:[],date,duration:''});
+    setModalLog(date);
+  };
+  const saveLog = () => {
+    const log = {...logForm,date:modalLog,id:Date.now()};
+    setGym(g=>{
+      const existing = (g.logs||[]).findIndex(l=>l.date===modalLog);
+      const logs = existing>=0?g.logs.map((l,i)=>i===existing?log:l):[...g.logs,log];
+      return {...g,logs};
+    });
+    setModalLog(null);setLogForm({note:'',exercises:[]});
+    showToast('Entrenamiento guardado');
+  };
+
+  // ── Ejercicios (biblioteca) ──
+  const blankEx = {name:'',muscle:'',sets:'',reps:'',weight:'',notes:''};
+  const [exForm,setExForm] = useState(blankEx);
+  const openNewEx = () => {setEditExercise(null);setExForm(blankEx);setModalExercise(true);};
+  const openEditEx = e => {setEditExercise(e);setExForm({...blankEx,...e});setModalExercise(true);};
+  const saveEx = () => {
+    if(!exForm.name.trim()) return;
+    const item = {...exForm,id:editExercise?editExercise.id:Date.now()};
+    setGym(g=>({...g,exercises:editExercise?g.exercises.map(e=>e.id===editExercise.id?item:e):[...g.exercises,item]}));
+    setModalExercise(false);setEditExercise(null);setExForm(blankEx);
+    showToast(editExercise?'Ejercicio actualizado':'Ejercicio guardado');
+  };
+  const delEx = id => {setGym(g=>({...g,exercises:g.exercises.filter(e=>e.id!==id)}));showToast('Eliminado');};
+
+  // ── Estadísticas rápidas ──
+  const totalSessions = (gym.logs||[]).length;
+  const thisWeekSessions = (gym.logs||[]).filter(l=>{
+    const d=new Date(l.date+'T12:00:00');
+    return getWeekKey(d)===getWeekKey(new Date());
+  }).length;
+
+  return React.createElement('div',null,
+    React.createElement('div',{className:'page-header'},
+      React.createElement('h1',{className:'page-title'},'💪 ',React.createElement('span',null,'Gimnasio')),
+      React.createElement('div',{className:'flex gap-2'},
+        tab==='rutina'&&React.createElement('button',{className:'btn btn-primary',onClick:()=>openNewRoutine()},React.createElement(Icon,{name:'plus',size:16}),'Rutina'),
+        tab==='ejercicios'&&React.createElement('button',{className:'btn btn-primary',onClick:openNewEx},React.createElement(Icon,{name:'plus',size:16}),'Ejercicio'),
+        tab==='historial'&&React.createElement('button',{className:'btn btn-primary',onClick:()=>openLog(todayStr2)},React.createElement(Icon,{name:'plus',size:16}),'Registrar hoy')
+      )
+    ),
+
+    // ── Stats rápidas ──
+    React.createElement('div',{className:'grid-3',style:{gap:16,marginBottom:20}},
+      React.createElement('div',{className:'stat-card'},
+        React.createElement('div',{className:'stat-num',style:{color:'var(--orange)'}},thisWeekSessions),
+        React.createElement('div',{className:'stat-label'},'Esta semana'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'sesiones')
+      ),
+      React.createElement('div',{className:'stat-card'},
+        React.createElement('div',{className:'stat-num',style:{color:'var(--accent)'}},totalSessions),
+        React.createElement('div',{className:'stat-label'},'Total sesiones'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'registradas')
+      ),
+      React.createElement('div',{className:'stat-card'},
+        React.createElement('div',{className:'stat-num',style:{color:'var(--cyan)'}},gym.routines.length),
+        React.createElement('div',{className:'stat-label'},'Rutinas'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'guardadas')
+      )
+    ),
+
+    // ── Tabs ──
+    React.createElement('div',{className:'tabs',style:{marginBottom:20,maxWidth:380}},
+      [['rutina','Mis Rutinas'],['historial','Historial'],['ejercicios','Ejercicios']].map(([v,l])=>
+        React.createElement('button',{key:v,className:`tab${tab===v?' active':''}`,onClick:()=>setTab(v)},l)
+      )
+    ),
+
+    // ══ TAB: RUTINAS ══
+    tab==='rutina'&&React.createElement('div',null,
+      gym.routines.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},
+        React.createElement('div',{style:{fontSize:40,marginBottom:12}},'🏋️'),
+        React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'Sin rutinas cargadas'),
+        React.createElement('div',{style:{fontSize:13,marginBottom:16}},'Cargá tu rutina de lunes, martes, etc.'),
+        React.createElement('button',{className:'btn btn-primary',onClick:()=>openNewRoutine()},React.createElement(Icon,{name:'plus',size:16}),'Crear rutina')
+      ),
+      // Agrupar por día de la semana
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:12}},
+        GYM_DAYS_LABELS.map(day=>{
+          const dayRoutines = gym.routines.filter(r=>r.day===day);
+          return React.createElement('div',{key:day},
+            React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}},
+              React.createElement('div',{style:{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--text3)'}},day),
+              React.createElement('button',{className:'btn btn-ghost btn-sm',style:{fontSize:11},onClick:()=>openNewRoutine(day)},React.createElement(Icon,{name:'plus',size:12}),' Agregar')
+            ),
+            dayRoutines.length===0
+              ? React.createElement('div',{style:{fontSize:12,color:'var(--text3)',padding:'8px 12px',background:'var(--bg3)',borderRadius:8,fontStyle:'italic'}},'Descanso / Sin rutina')
+              : dayRoutines.map(r=>React.createElement('div',{key:r.id,className:'card',style:{padding:18,marginBottom:8,cursor:'pointer'},onClick:()=>openEditRoutine(r)},
+                  React.createElement('div',{className:'flex justify-between items-start'},
+                    React.createElement('div',{style:{flex:1}},
+                      React.createElement('div',{style:{fontWeight:700,fontSize:15,marginBottom:4}},r.name),
+                      (r.muscles||[]).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6}},
+                        (r.muscles||[]).map(m=>React.createElement('div',{key:m,style:{fontSize:11,background:'rgba(251,146,60,0.15)',color:'var(--orange)',padding:'2px 8px',borderRadius:12,fontWeight:600}},m))
+                      ),
+                      (r.exercises||[]).length>0&&React.createElement('div',{style:{fontSize:12,color:'var(--text2)',marginBottom:4}},
+                        (r.exercises||[]).join(' · ')
+                      ),
+                      r.notes&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)',fontStyle:'italic',marginTop:4}},r.notes)
+                    ),
+                    React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',flexShrink:0},onClick:e=>{e.stopPropagation();delRoutine(r.id);}},React.createElement(Icon,{name:'trash',size:13}))
+                  )
+                ))
+          );
+        })
+      )
+    ),
+
+    // ══ TAB: HISTORIAL ══
+    tab==='historial'&&React.createElement('div',null,
+      React.createElement('div',{className:'card',style:{marginBottom:16}},
+        React.createElement('div',{className:'card-title'},'Registrar entrenamiento'),
+        React.createElement('div',{style:{fontSize:13,color:'var(--text3)',marginBottom:12}},'Seleccioná una fecha para ver o registrar tu sesión'),
+        React.createElement('div',{className:'flex gap-2',style:{alignItems:'center',flexWrap:'wrap'}},
+          React.createElement('input',{className:'input',type:'date',defaultValue:todayStr2,id:'gym-log-date',style:{maxWidth:200}}),
+          React.createElement('button',{className:'btn btn-primary btn-sm',onClick:()=>{
+            const d=document.getElementById('gym-log-date').value;
+            if(d) openLog(d);
+          }},'Ver / Registrar')
+        )
+      ),
+      (gym.logs||[]).length===0
+        ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:32,color:'var(--text3)'}},'Todavía no registraste ningún entrenamiento.')
+        : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+            [...(gym.logs||[])].sort((a,b)=>b.date.localeCompare(a.date)).map(log=>{
+              const d=new Date(log.date+'T12:00:00');
+              return React.createElement('div',{key:log.id||log.date,className:'card',style:{padding:18,cursor:'pointer'},onClick:()=>openLog(log.date)},
+                React.createElement('div',{className:'flex justify-between items-center'},
+                  React.createElement('div',null,
+                    React.createElement('div',{style:{fontWeight:700,fontSize:14}},DAYS[d.getDay()]+' '+d.getDate()+' de '+MONTHS[d.getMonth()]),
+                    log.duration&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'⏱ '+log.duration+' min'),
+                    log.note&&React.createElement('div',{style:{fontSize:12,color:'var(--text2)',marginTop:4}},log.note),
+                    (log.exercises||[]).length>0&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:4}},
+                      (log.exercises||[]).join(' · ')
+                    )
+                  ),
+                  React.createElement('div',{style:{fontSize:22}},'✅')
+                )
+              );
+            })
+          )
+    ),
+
+    // ══ TAB: EJERCICIOS ══
+    tab==='ejercicios'&&React.createElement('div',null,
+      gym.exercises.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},
+        React.createElement('div',{style:{fontSize:40,marginBottom:12}},'🏋️'),
+        React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'Biblioteca de ejercicios'),
+        React.createElement('div',{style:{fontSize:13,marginBottom:16}},'Guardá tus ejercicios con series, reps y peso para trackear tu progreso.'),
+        React.createElement('button',{className:'btn btn-primary',onClick:openNewEx},React.createElement(Icon,{name:'plus',size:16}),'Agregar ejercicio')
+      ),
+      // Agrupar por músculo
+      GYM_MUSCLE_GROUPS.filter(mg=>(gym.exercises||[]).some(e=>e.muscle===mg)).map(mg=>
+        React.createElement('div',{key:mg,style:{marginBottom:20}},
+          React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--orange)',marginBottom:8}},'💪 '+mg),
+          React.createElement('div',{className:'grid-2',style:{gap:8}},
+            gym.exercises.filter(e=>e.muscle===mg).map(e=>React.createElement('div',{key:e.id,className:'card',style:{padding:16,cursor:'pointer'},onClick:()=>openEditEx(e)},
+              React.createElement('div',{className:'flex justify-between items-start'},
+                React.createElement('div',{style:{flex:1}},
+                  React.createElement('div',{style:{fontWeight:700,fontSize:14,marginBottom:4}},e.name),
+                  React.createElement('div',{style:{display:'flex',gap:10,fontSize:12,color:'var(--text2)',flexWrap:'wrap'}},
+                    e.sets&&React.createElement('span',null,'📊 ',e.sets,' series'),
+                    e.reps&&React.createElement('span',null,'🔁 ',e.reps,' reps'),
+                    e.weight&&React.createElement('span',null,'⚖️ ',e.weight,' kg')
+                  ),
+                  e.notes&&React.createElement('div',{style:{fontSize:11,color:'var(--text3)',marginTop:4,fontStyle:'italic'}},e.notes)
+                ),
+                React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)',flexShrink:0},onClick:ev=>{ev.stopPropagation();delEx(e.id);}},React.createElement(Icon,{name:'trash',size:12}))
+              )
+            ))
+          )
+        )
+      ),
+      (gym.exercises||[]).filter(e=>!GYM_MUSCLE_GROUPS.includes(e.muscle)).length>0&&
+        React.createElement('div',{style:{marginBottom:20}},
+          React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--orange)',marginBottom:8}},'💪 Otros'),
+          React.createElement('div',{className:'grid-2',style:{gap:8}},
+            gym.exercises.filter(e=>!GYM_MUSCLE_GROUPS.includes(e.muscle)).map(e=>React.createElement('div',{key:e.id,className:'card',style:{padding:16,cursor:'pointer'},onClick:()=>openEditEx(e)},
+              React.createElement('div',{style:{fontWeight:700,fontSize:14}},e.name)
+            ))
+          )
+        )
+    ),
+
+    // ── Modal: Rutina ──
+    modalRoutine&&React.createElement(Modal,{title:editRoutine?'Editar Rutina':'Nueva Rutina',onClose:()=>{setModalRoutine(false);setEditRoutine(null);},wide:true},
+      React.createElement('div',{className:'flex flex-col gap-3'},
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre de la rutina'),React.createElement('input',{className:'input',placeholder:'Ej: Push A, Piernas Fuerza...',value:routineForm.name,onChange:e=>setRoutineForm(f=>({...f,name:e.target.value})),autoFocus:true})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Día'),
+          React.createElement('select',{className:'input select',value:routineForm.day,onChange:e=>setRoutineForm(f=>({...f,day:e.target.value}))},
+            React.createElement('option',{value:''},'— Sin día fijo —'),
+            GYM_DAYS_LABELS.map(d=>React.createElement('option',{key:d,value:d},d))
+          )
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Grupos musculares'),
+          React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6}},
+            GYM_MUSCLE_GROUPS.map(m=>React.createElement('button',{key:m,
+              className:`btn btn-sm ${(routineForm.muscles||[]).includes(m)?'btn-primary':'btn-ghost'}`,
+              onClick:()=>setRoutineForm(f=>({...f,muscles:(f.muscles||[]).includes(m)?f.muscles.filter(x=>x!==m):[...f.muscles,m]}))
+            },m))
+          )
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Ejercicios (uno por línea)'),
+          React.createElement('textarea',{className:'input',rows:5,
+            placeholder:'Press banca 4x8\nPress inclinado 3x10\nAperturas 3x12\n...',
+            value:(routineForm.exercises||[]).join('\n'),
+            onChange:e=>setRoutineForm(f=>({...f,exercises:e.target.value.split('\n')})),
+            style:{resize:'vertical',fontFamily:'var(--mono)',fontSize:13,lineHeight:1.6}
+          })
+        ),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Notas'),React.createElement('textarea',{className:'input',rows:2,placeholder:'Observaciones, links de videos, tips...',value:routineForm.notes||'',onChange:e=>setRoutineForm(f=>({...f,notes:e.target.value})),style:{resize:'vertical'}})),
+        React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
+          React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:saveRoutine},'Guardar Rutina'),
+          editRoutine&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{delRoutine(editRoutine.id);setModalRoutine(false);}},React.createElement(Icon,{name:'trash',size:16}))
+        )
+      )
+    ),
+
+    // ── Modal: Log ──
+    modalLog&&React.createElement(Modal,{title:'Entrenamiento — '+modalLog,onClose:()=>setModalLog(null)},
+      React.createElement('div',{className:'flex flex-col gap-3'},
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'⏱ Duración (minutos)'),React.createElement('input',{className:'input',type:'number',placeholder:'60',value:logForm.duration||'',onChange:e=>setLogForm(f=>({...f,duration:e.target.value}))})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Ejercicios realizados (uno por línea)'),
+          React.createElement('textarea',{className:'input',rows:5,
+            placeholder:'Press banca 4x8 @ 80kg\nSentadilla 3x10 @ 100kg\n...',
+            value:(logForm.exercises||[]).join('\n'),
+            onChange:e=>setLogForm(f=>({...f,exercises:e.target.value.split('\n').filter(Boolean)})),
+            style:{resize:'vertical',fontFamily:'var(--mono)',fontSize:13,lineHeight:1.6}
+          })
+        ),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Notas'),React.createElement('textarea',{className:'input',rows:2,placeholder:'Cómo te sentiste, PRs, etc...',value:logForm.note||'',onChange:e=>setLogForm(f=>({...f,note:e.target.value})),style:{resize:'vertical'}})),
+        React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center'},onClick:saveLog},'Guardar entrenamiento')
+      )
+    ),
+
+    // ── Modal: Ejercicio ──
+    modalExercise&&React.createElement(Modal,{title:editExercise?'Editar Ejercicio':'Nuevo Ejercicio',onClose:()=>{setModalExercise(false);setEditExercise(null);}},
+      React.createElement('div',{className:'flex flex-col gap-3'},
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Press banca',value:exForm.name,onChange:e=>setExForm(f=>({...f,name:e.target.value})),autoFocus:true})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Grupo muscular'),
+          React.createElement('select',{className:'input select',value:exForm.muscle,onChange:e=>setExForm(f=>({...f,muscle:e.target.value}))},
+            React.createElement('option',{value:''},'— Seleccioná —'),
+            GYM_MUSCLE_GROUPS.map(m=>React.createElement('option',{key:m,value:m},m))
+          )
+        ),
+        React.createElement('div',{className:'grid-3',style:{gap:10}},
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Series'),React.createElement('input',{className:'input',placeholder:'4',value:exForm.sets||'',onChange:e=>setExForm(f=>({...f,sets:e.target.value}))})),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Reps'),React.createElement('input',{className:'input',placeholder:'8-10',value:exForm.reps||'',onChange:e=>setExForm(f=>({...f,reps:e.target.value}))})),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Peso (kg)'),React.createElement('input',{className:'input',placeholder:'80',value:exForm.weight||'',onChange:e=>setExForm(f=>({...f,weight:e.target.value}))}))
+        ),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Notas'),React.createElement('input',{className:'input',placeholder:'Tips de técnica, variantes...',value:exForm.notes||'',onChange:e=>setExForm(f=>({...f,notes:e.target.value}))})),
+        React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
+          React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:saveEx},'Guardar'),
+          editExercise&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{delEx(editExercise.id);setModalExercise(false);}},React.createElement(Icon,{name:'trash',size:16}))
         )
       )
     )
@@ -2331,6 +2635,7 @@ const NAV_ITEMS = [
   {id:'activities',label:'Actividades',icon:'activity'},
   {id:'tasks',label:'Tareas',icon:'check'},
   {id:'habits',label:'Hábitos',icon:'heart'},
+  {id:'gym',label:'Gym',icon:'gym'},
   {id:'stats',label:'Stats',icon:'chart'},
   {id:'focus',label:'Enfoque',icon:'focus'},
   {id:'notes',label:'Notas',icon:'note'},
@@ -2435,6 +2740,7 @@ function App() {
     activities:  React.createElement(Activities,   {state:data,setState:setData,showToast}),
     tasks:       React.createElement(Tasks,        {state:data,setState:setData,showToast}),
     habits:      React.createElement(Habits,       {state:data,setState:setData,showToast}),
+    gym:         React.createElement(Gym,          {state:data,setState:setData,showToast}),
     stats:       React.createElement(Stats,        {state:data}),
     focus:       React.createElement(Focus,        {state:data,setState:setData,showToast}),
     notes:       React.createElement(Notes,        {state:data,setState:setData,showToast}),
