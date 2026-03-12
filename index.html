@@ -142,6 +142,21 @@
   .habit-dot{width:28px;height:28px;border-radius:7px;background:var(--bg);border:1px solid var(--border);cursor:pointer;transition:all var(--transition);font-size:13px;display:flex;align-items:center;justify-content:center;}
   .habit-dot.done{background:var(--green);border-color:var(--green);color:#fff;}
 
+  /* ── GYM EXERCISE PICKER ── */
+  .ex-tags{display:flex;flex-wrap:wrap;gap:6px;min-height:36px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:text;}
+  .ex-tags:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+  .ex-tag{display:flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 8px 3px 10px;font-size:12px;font-weight:600;white-space:nowrap;}
+  .ex-tag.new-ex{background:var(--orange);}
+  .ex-tag-del{background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;}
+  .ex-tag-del:hover{color:#fff;}
+  .ex-input-wrap{position:relative;flex:1;min-width:140px;}
+  .ex-input{background:none;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px;width:100%;padding:2px 4px;}
+  .ex-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow);z-index:200;overflow:hidden;max-height:200px;overflow-y:auto;}
+  .ex-drop-item{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:background var(--transition);}
+  .ex-drop-item:hover,.ex-drop-item.active{background:var(--bg3);}
+  .ex-drop-muscle{font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 6px;border-radius:4px;}
+  .ex-drop-new{font-size:11px;color:var(--orange);background:rgba(251,146,60,0.1);padding:2px 6px;border-radius:4px;}
+
   /* ── STATS ── */
   .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:8px;}
   .stat-num{font-size:36px;font-weight:800;font-family:var(--mono);letter-spacing:-2px;}
@@ -2041,6 +2056,116 @@ function Habits({state,setState,showToast}) {
 const GYM_MUSCLE_GROUPS = ['Pecho','Espalda','Piernas','Hombros','Bíceps','Tríceps','Abdomen','Glúteos','Pantorrillas','Full Body','Cardio','Otro'];
 const GYM_DAYS_LABELS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
+// ── ExercisePicker: tag input con autocomplete desde biblioteca ──
+function ExercisePicker({value, onChange, exercises, onAddToLibrary}) {
+  // value: string[] — lista de nombres de ejercicios
+  const [query, setQuery] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const [activeIdx, setActiveIdx] = React.useState(0);
+  const inputRef = React.useRef(null);
+
+  const exNames = (exercises||[]).map(e=>e.name);
+
+  // Sugerencias: ejercicios que coincidan con query y no estén ya seleccionados
+  const suggestions = React.useMemo(()=>{
+    if(!query.trim()) return exNames.filter(n=>!value.includes(n)).slice(0,8);
+    const q = query.toLowerCase();
+    return exNames.filter(n=>n.toLowerCase().includes(q) && !value.includes(n));
+  },[query, exNames, value]);
+
+  // Si el query no matchea exactamente ningún ejercicio, ofrecer "Agregar nuevo"
+  const exactMatch = exNames.some(n=>n.toLowerCase()===query.trim().toLowerCase());
+  const showAddNew = query.trim() && !exactMatch;
+
+  const addTag = (name) => {
+    const trimmed = name.trim();
+    if(!trimmed || value.includes(trimmed)) return;
+    onChange([...value, trimmed]);
+    setQuery('');
+    setOpen(false);
+    setActiveIdx(0);
+    inputRef.current?.focus();
+  };
+
+  const removeTag = (name) => onChange(value.filter(v=>v!==name));
+
+  const allOptions = showAddNew ? [...suggestions, {__new: true, name: query.trim()}] : suggestions;
+
+  const handleKey = (e) => {
+    if(e.key==='Enter') {
+      e.preventDefault();
+      if(open && allOptions.length>0) {
+        const opt = allOptions[activeIdx] || allOptions[0];
+        if(opt.__new) {
+          addTag(opt.name);
+          // ofrecer agregar a biblioteca
+          if(onAddToLibrary) onAddToLibrary(opt.name);
+        } else {
+          addTag(opt.name || opt);
+        }
+      } else if(query.trim()) {
+        addTag(query.trim());
+        if(onAddToLibrary && !exactMatch) onAddToLibrary(query.trim());
+      }
+    } else if(e.key==='Backspace' && !query && value.length>0) {
+      removeTag(value[value.length-1]);
+    } else if(e.key==='ArrowDown') {
+      e.preventDefault();
+      setActiveIdx(i=>Math.min(i+1, allOptions.length-1));
+    } else if(e.key==='ArrowUp') {
+      e.preventDefault();
+      setActiveIdx(i=>Math.max(i-1, 0));
+    } else if(e.key==='Escape') {
+      setOpen(false);
+    }
+  };
+
+  return React.createElement('div',{className:'ex-tags', onClick:()=>inputRef.current?.focus()},
+    value.map(v => {
+      const inLib = exNames.includes(v);
+      return React.createElement('span',{key:v, className:`ex-tag${inLib?'':' new-ex'}`},
+        v,
+        React.createElement('button',{className:'ex-tag-del', onClick:(e)=>{e.stopPropagation();removeTag(v);}}, '×')
+      );
+    }),
+    React.createElement('div',{className:'ex-input-wrap'},
+      React.createElement('input',{
+        ref:inputRef,
+        className:'ex-input',
+        placeholder: value.length===0 ? 'Escribí o buscá un ejercicio...' : '',
+        value: query,
+        onChange: e=>{setQuery(e.target.value);setOpen(true);setActiveIdx(0);},
+        onFocus: ()=>setOpen(true),
+        onBlur: ()=>setTimeout(()=>setOpen(false), 150),
+        onKeyDown: handleKey
+      }),
+      open && (allOptions.length>0) && React.createElement('div',{className:'ex-dropdown'},
+        allOptions.map((opt,i)=>{
+          const isNew = opt.__new;
+          const name = isNew ? opt.name : (opt.name||opt);
+          const ex = isNew ? null : (exercises||[]).find(e=>e.name===name);
+          return React.createElement('div',{
+            key: isNew?'__new':name,
+            className:`ex-drop-item${i===activeIdx?' active':''}`,
+            onMouseDown: (e)=>{
+              e.preventDefault();
+              if(isNew){addTag(name);if(onAddToLibrary)onAddToLibrary(name);}
+              else addTag(name);
+            }
+          },
+            React.createElement('span',null, isNew ? `Agregar "${name}"` : name),
+            isNew
+              ? React.createElement('span',{className:'ex-drop-new'},'+ nuevo')
+              : ex?.muscle
+                ? React.createElement('span',{className:'ex-drop-muscle'},ex.muscle)
+                : null
+          );
+        })
+      )
+    )
+  );
+}
+
 function Gym({state,setState,showToast}) {
   const [tab,setTab] = useState('rutina'); // 'rutina' | 'historial' | 'ejercicios'
   const [modalRoutine,setModalRoutine] = useState(false);
@@ -2049,9 +2174,25 @@ function Gym({state,setState,showToast}) {
   const [editRoutine,setEditRoutine] = useState(null);
   const [editExercise,setEditExercise] = useState(null);
   const [logForm,setLogForm] = useState({note:'',exercises:[]});
+  const [pendingLibrary,setPendingLibrary] = useState([]); // nombres a confirmar agregar a biblioteca
 
   const gym = state.gym || {routines:[],logs:[],exercises:[]};
   const setGym = fn => setState(s=>({...s,gym:typeof fn==='function'?fn(s.gym||{routines:[],logs:[],exercises:[]}):fn}));
+
+  // Cuando el usuario agrega un ejercicio nuevo desde el picker, preguntar si lo guarda en biblioteca
+  const handleAddToLibrary = (name) => {
+    const already = (gym.exercises||[]).some(e=>e.name.toLowerCase()===name.toLowerCase());
+    if(!already && !pendingLibrary.includes(name)) {
+      setPendingLibrary(p=>[...p, name]);
+    }
+  };
+  const confirmAddToLibrary = (name) => {
+    const item = {name, muscle:'', sets:'', reps:'', weight:'', notes:'', id:Date.now()+Math.random()};
+    setGym(g=>({...g,exercises:[...g.exercises, item]}));
+    setPendingLibrary(p=>p.filter(x=>x!==name));
+    showToast(`"${name}" agregado a la biblioteca`);
+  };
+  const dismissPending = (name) => setPendingLibrary(p=>p.filter(x=>x!==name));
 
   // ── Rutinas ──
   const blankRoutine = {name:'',day:'',muscles:[],exercises:[],notes:''};
@@ -2200,17 +2341,21 @@ function Gym({state,setState,showToast}) {
         : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
             [...(gym.logs||[])].sort((a,b)=>b.date.localeCompare(a.date)).map(log=>{
               const d=new Date(log.date+'T12:00:00');
+              const routine = log.routineId ? (gym.routines||[]).find(r=>r.id===log.routineId) : null;
               return React.createElement('div',{key:log.id||log.date,className:'card',style:{padding:18,cursor:'pointer'},onClick:()=>openLog(log.date)},
                 React.createElement('div',{className:'flex justify-between items-center'},
-                  React.createElement('div',null,
+                  React.createElement('div',{style:{flex:1,minWidth:0}},
                     React.createElement('div',{style:{fontWeight:700,fontSize:14}},DAYS[d.getDay()]+' '+d.getDate()+' de '+MONTHS[d.getMonth()]),
+                    routine&&React.createElement('div',{style:{fontSize:12,color:'var(--accent)',fontWeight:600,marginTop:3}},
+                      '💪 '+routine.name+(routine.day?' · '+routine.day:'')
+                    ),
                     log.duration&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'⏱ '+log.duration+' min'),
-                    log.note&&React.createElement('div',{style:{fontSize:12,color:'var(--text2)',marginTop:4}},log.note),
-                    (log.exercises||[]).length>0&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:4}},
+                    (log.exercises||[]).length>0&&React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},
                       (log.exercises||[]).join(' · ')
-                    )
+                    ),
+                    log.note&&React.createElement('div',{style:{fontSize:12,color:'var(--text2)',marginTop:4,fontStyle:'italic'}},log.note)
                   ),
-                  React.createElement('div',{style:{fontSize:22}},'✅')
+                  React.createElement('div',{style:{fontSize:22,flexShrink:0,marginLeft:8}},'✅')
                 )
               );
             })
@@ -2279,13 +2424,23 @@ function Gym({state,setState,showToast}) {
           )
         ),
         React.createElement('div',{className:'form-group'},
-          React.createElement('label',{className:'label'},'Ejercicios (uno por línea)'),
-          React.createElement('textarea',{className:'input',rows:5,
-            placeholder:'Press banca 4x8\nPress inclinado 3x10\nAperturas 3x12\n...',
-            value:(routineForm.exercises||[]).join('\n'),
-            onChange:e=>setRoutineForm(f=>({...f,exercises:e.target.value.split('\n')})),
-            style:{resize:'vertical',fontFamily:'var(--mono)',fontSize:13,lineHeight:1.6}
-          })
+          React.createElement('label',{className:'label'},'Ejercicios'),
+          React.createElement('p',{style:{fontSize:12,color:'var(--text3)',marginBottom:6}},'Buscá ejercicios de tu biblioteca o escribí uno nuevo y presioná Enter'),
+          React.createElement(ExercisePicker,{
+            value: routineForm.exercises||[],
+            onChange: exs => setRoutineForm(f=>({...f,exercises:exs})),
+            exercises: gym.exercises||[],
+            onAddToLibrary: handleAddToLibrary
+          }),
+          pendingLibrary.length>0&&React.createElement('div',{style:{marginTop:10,display:'flex',flexDirection:'column',gap:6}},
+            pendingLibrary.map(name=>React.createElement('div',{key:name,style:{display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.25)',borderRadius:8,padding:'8px 12px',fontSize:13}},
+              React.createElement('span',null,'¿Guardar ',React.createElement('strong',null,name),' en tu biblioteca?'),
+              React.createElement('div',{className:'flex gap-2'},
+                React.createElement('button',{className:'btn btn-sm btn-primary',style:{fontSize:12},onClick:()=>confirmAddToLibrary(name)},'Sí'),
+                React.createElement('button',{className:'btn btn-sm btn-ghost',style:{fontSize:12},onClick:()=>dismissPending(name)},'No')
+              )
+            ))
+          )
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Notas'),React.createElement('textarea',{className:'input',rows:2,placeholder:'Observaciones, links de videos, tips...',value:routineForm.notes||'',onChange:e=>setRoutineForm(f=>({...f,notes:e.target.value})),style:{resize:'vertical'}})),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
@@ -2298,16 +2453,56 @@ function Gym({state,setState,showToast}) {
     // ── Modal: Log ──
     modalLog&&React.createElement(Modal,{title:'Entrenamiento — '+modalLog,onClose:()=>setModalLog(null)},
       React.createElement('div',{className:'flex flex-col gap-3'},
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'⏱ Duración (minutos)'),React.createElement('input',{className:'input',type:'number',placeholder:'60',value:logForm.duration||'',onChange:e=>setLogForm(f=>({...f,duration:e.target.value}))})),
+        // Selector de rutina
         React.createElement('div',{className:'form-group'},
-          React.createElement('label',{className:'label'},'Ejercicios realizados (uno por línea)'),
-          React.createElement('textarea',{className:'input',rows:5,
-            placeholder:'Press banca 4x8 @ 80kg\nSentadilla 3x10 @ 100kg\n...',
-            value:(logForm.exercises||[]).join('\n'),
-            onChange:e=>setLogForm(f=>({...f,exercises:e.target.value.split('\n').filter(Boolean)})),
-            style:{resize:'vertical',fontFamily:'var(--mono)',fontSize:13,lineHeight:1.6}
-          })
+          React.createElement('label',{className:'label'},'¿Qué rutina hiciste?'),
+          gym.routines.length===0
+            ? React.createElement('div',{style:{fontSize:12,color:'var(--text3)',padding:'8px 12px',background:'var(--bg3)',borderRadius:8}},'Todavía no tenés rutinas guardadas. Podés agregar ejercicios manualmente abajo.')
+            : React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6}},
+                // Botón "Ninguna / libre"
+                React.createElement('button',{
+                  className:`btn btn-sm ${!logForm.routineId?'btn-primary':'btn-ghost'}`,
+                  onClick:()=>setLogForm(f=>({...f,routineId:null}))
+                },'Libre / Sin rutina'),
+                gym.routines.map(r=>React.createElement('button',{
+                  key:r.id,
+                  className:`btn btn-sm ${logForm.routineId===r.id?'btn-primary':'btn-ghost'}`,
+                  style:logForm.routineId===r.id?{}:{},
+                  onClick:()=>{
+                    setLogForm(f=>({
+                      ...f,
+                      routineId: r.id,
+                      // Pre-cargar ejercicios de la rutina (sin sobreescribir si ya hay)
+                      exercises: (r.exercises||[]).filter(Boolean)
+                    }));
+                  }
+                },
+                  r.day ? `${r.day} — ${r.name}` : r.name,
+                  (r.muscles||[]).length>0 && React.createElement('span',{style:{marginLeft:6,fontSize:10,opacity:0.75}},'('+r.muscles.slice(0,2).join(', ')+')')
+                ))
+              )
         ),
+        // Mostrar ejercicios de la rutina seleccionada (editable con ExercisePicker)
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Ejercicios realizados'),
+          React.createElement('p',{style:{fontSize:12,color:'var(--text3)',marginBottom:6}},'Se cargaron los de la rutina — podés editar, agregar o quitar'),
+          React.createElement(ExercisePicker,{
+            value: logForm.exercises||[],
+            onChange: exs => setLogForm(f=>({...f,exercises:exs})),
+            exercises: gym.exercises||[],
+            onAddToLibrary: handleAddToLibrary
+          }),
+          pendingLibrary.length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexDirection:'column',gap:6}},
+            pendingLibrary.map(name=>React.createElement('div',{key:name,style:{display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.25)',borderRadius:8,padding:'8px 12px',fontSize:13}},
+              React.createElement('span',null,'¿Guardar ',React.createElement('strong',null,name),' en tu biblioteca?'),
+              React.createElement('div',{className:'flex gap-2'},
+                React.createElement('button',{className:'btn btn-sm btn-primary',style:{fontSize:12},onClick:()=>confirmAddToLibrary(name)},'Sí'),
+                React.createElement('button',{className:'btn btn-sm btn-ghost',style:{fontSize:12},onClick:()=>dismissPending(name)},'No')
+              )
+            ))
+          )
+        ),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'⏱ Duración (minutos)'),React.createElement('input',{className:'input',type:'number',placeholder:'60',value:logForm.duration||'',onChange:e=>setLogForm(f=>({...f,duration:e.target.value}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Notas'),React.createElement('textarea',{className:'input',rows:2,placeholder:'Cómo te sentiste, PRs, etc...',value:logForm.note||'',onChange:e=>setLogForm(f=>({...f,note:e.target.value})),style:{resize:'vertical'}})),
         React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center'},onClick:saveLog},'Guardar entrenamiento')
       )
