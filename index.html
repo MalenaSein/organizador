@@ -1663,7 +1663,16 @@ function Tasks({state,setState,showToast}) {
     if(filter==='actividades') return !!t.activity;
     if(activityNames.includes(filter)) return t.activity===filter;
     return t.type===filter;
-  }).sort((a,b)=>({alta:0,media:1,baja:2}[a.priority]||1)-({alta:0,media:1,baja:2}[b.priority]||1));
+  }).sort((a,b)=>{
+    // Completadas siempre al final
+    if(a.status==='completada' && b.status!=='completada') return 1;
+    if(b.status==='completada' && a.status!=='completada') return -1;
+    // Ordenar por fecha límite (sin fecha al final)
+    const da = a.dueDate||'9999-99-99', db = b.dueDate||'9999-99-99';
+    if(da!==db) return da < db ? -1 : 1;
+    // Si misma fecha, ordenar por prioridad
+    return ({alta:0,media:1,baja:2}[a.priority]||1)-({alta:0,media:1,baja:2}[b.priority]||1);
+  });
 
   const toggle=id=>setState(s=>({...s,tasks:s.tasks.map(t=>t.id===id?{...t,status:t.status==='completada'?'pendiente':'completada'}:t)}));
 
