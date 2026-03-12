@@ -1063,7 +1063,7 @@ function Calendar({state,setState,showToast}) {
     modal&&React.createElement(Modal,{title:editEv?'Editar Evento':'Nuevo Evento',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título'),React.createElement('input',{className:'input',value:form.title,placeholder:'Ej: Hacer tarea de Cálculo',onChange:F('title'),autoFocus:true})),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Categoría'),React.createElement('select',{className:'input select',value:form.category,onChange:F('category')},['facultad','extracurricular','personal','hogar'].map(c=>React.createElement('option',{key:c,value:c},c)))),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Categoría'),React.createElement('select',{className:'input select',value:form.category,onChange:F('category')},['facultad','trabajo','ejercicio','extracurricular','personal','hogar'].map(c=>React.createElement('option',{key:c,value:c},c)))),
         state.subjects.length>0&&form.category==='facultad'&&React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'Materia (opcional)'),
           React.createElement('select',{className:'input select',value:form.subject,onChange:F('subject')},
