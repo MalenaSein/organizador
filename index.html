@@ -126,6 +126,9 @@
   .week-slot{border-left:1px solid var(--border);border-bottom:1px solid rgba(255,255,255,0.03);height:40px;position:relative;cursor:pointer;}
   .week-slot:hover{background:var(--accent-glow);}
   .week-event{position:absolute;left:2px;right:2px;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;color:#fff;overflow:hidden;cursor:pointer;z-index:2;white-space:nowrap;text-overflow:ellipsis;}
+  /* Mobile: week view scrolls horizontally, never shrinks */
+  .cal-week-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;}
+  .cal-week-scroll > div{min-width:660px;}
 
   /* ── TASKS ── */
   .task-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--radius-sm);background:var(--bg3);margin-bottom:8px;border:1px solid transparent;transition:border var(--transition);}
@@ -891,8 +894,8 @@ function WeekCalendarGrid({weekDates, subjects, events, activities, tasks, onSlo
       onNewEvent: (date)=>{ setDayPopup(null); onSlotClick&&onSlotClick(date,'09:00'); },
       onEditEvent: (ev)=>{ setDayPopup(null); onEventClick&&onEventClick(ev); },
     }),
-    React.createElement('div',{style:{overflowX:'auto'}},
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',minWidth:520}},
+    React.createElement('div',{style:{overflowX:'auto',WebkitOverflowScrolling:'touch'}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'52px repeat(7,minmax(90px,1fr))',minWidth:700}},
 
         // ── Header row — tap day name to open popup ──
         React.createElement('div',{style:{padding:'8px 0'}}),
