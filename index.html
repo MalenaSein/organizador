@@ -2818,6 +2818,31 @@ function Profile({user,onLogout,state,showToast}) {
           )
         )
       )
+    ),
+    React.createElement('div',{className:'card',style:{
+      marginTop:4,
+      background:'linear-gradient(135deg,rgba(124,106,247,0.08),rgba(244,114,182,0.08))',
+      border:'1px solid rgba(244,114,182,0.2)',
+      borderRadius:'var(--radius)',
+      padding:24,
+      textAlign:'center'
+    }},
+      React.createElement('div',{style:{fontSize:28,marginBottom:10}},'✨'),
+      React.createElement('div',{style:{fontSize:14,lineHeight:1.8,color:'var(--text2)'}},
+        'Querido/a usuario/a: si encontrás algún ',React.createElement('strong',{style:{color:'var(--text)'}},'bug'),', ',
+        React.createElement('strong',{style:{color:'var(--text)'}},'error'),
+        ' o tenés alguna ',React.createElement('strong',{style:{color:'var(--text)'}},'petición'),
+        ', ¡hacéselo saber a su diosa creadora ',
+        React.createElement('span',{style:{
+          color:'var(--pink)',fontWeight:800,fontSize:16,
+          background:'rgba(244,114,182,0.12)',
+          padding:'1px 8px',borderRadius:8,
+          letterSpacing:'-0.3px'
+        }},'Malenit'),
+        '!'
+      ),
+      React.createElement('div',{style:{marginTop:10,fontSize:13,color:'var(--text3)',fontStyle:'italic'}},'ありがとう ございます！'),
+      React.createElement('div',{style:{marginTop:10,fontSize:13,color:'var(--text3)',fontStyle:'italic'}},'(arigatō gozaimasu!)')
     )
   );
 }
