@@ -1430,11 +1430,8 @@ function Tasks({state,setState,showToast}) {
         background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,
         padding:'10px 12px',marginBottom:8,
         borderLeft:'4px solid '+PC[task.priority],
-        opacity:isDragging?0.4:1,transition:'opacity 0.15s'
-      },
-        onMouseDown:e=>onMouseDown(e,task),
-        onTouchStart:e=>onTouchStart(e,task),
-      },
+        touchAction:'auto',userSelect:'none'
+      }},
         React.createElement('div',{style:{flex:1,minWidth:0}},
           React.createElement('div',{style:{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}},task.title),
           React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
