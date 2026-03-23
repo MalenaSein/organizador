@@ -175,6 +175,10 @@
   .icon-btn:hover{border-color:var(--accent-glow);}
   .icon-btn.selected{border-color:var(--accent);background:var(--accent-glow);}
 
+  /* LINKS SECTION */
+  .links-section{display:flex;flex-direction:column;gap:8px;}
+  .link-row{display:flex;gap:8px;align-items:center;}
+
   ::-webkit-scrollbar{width:4px;height:4px;}
   ::-webkit-scrollbar-track{background:transparent;}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
@@ -184,11 +188,9 @@
     .nav-logo{display:none;}
     .main{margin-left:0;margin-bottom:64px;padding:12px;}
     .grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}
-    /* mobile: kanban hidden, replaced by tab view */
     .kanban-board{display:none;}
     .nav-item.active::before{display:none;}
     .nav-bottom{margin-top:0;flex-direction:row;}
-    /* calendario mensual más grande en mobile */
     .cal-day{min-height:88px;padding:6px 4px;}
     .cal-day-num{font-size:14px;font-weight:700;margin-bottom:3px;}
     .cal-event-dot{font-size:9px;padding:2px 4px;border-radius:4px;}
@@ -252,7 +254,6 @@ const getWeekKey = d => {
 const DS = ['L','M','X','J','V','S','D'];
 const todayStr = () => fmtDate(new Date());
 
-// Helper to parse "HH:MM" string from time range "HH:MM-HH:MM"
 const parseTimeRange = (str) => {
   if(!str) return {start:'', end:''};
   const m = str.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
@@ -306,6 +307,7 @@ const IP = {
   bell:'M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0',
   pin:'M12 17v5M8 3h8l1 7-4 3-1 2h-4l-1-2-4-3z',
   tag:'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01',
+  link:'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71',
 };
 const Icon = ({name,size=18}) =>
   React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'},
@@ -320,18 +322,28 @@ function TimeRangePicker({value, onChange, label}) {
   return React.createElement('div',{className:'form-group'},
     label && React.createElement('label',{className:'label'},label),
     React.createElement('div',{className:'time-range-picker'},
-      React.createElement('input',{
-        type:'time', value:parsed.start||'',
-        onChange:e=>setStart(e.target.value),
-        style:{flex:1}
-      }),
+      React.createElement('input',{type:'time', value:parsed.start||'', onChange:e=>setStart(e.target.value), style:{flex:1}}),
       React.createElement('span',{className:'time-range-sep'},'→'),
-      React.createElement('input',{
-        type:'time', value:parsed.end||'',
-        onChange:e=>setEnd(e.target.value),
-        style:{flex:1}
-      })
+      React.createElement('input',{type:'time', value:parsed.end||'', onChange:e=>setEnd(e.target.value), style:{flex:1}})
     )
+  );
+}
+
+// ─── LINKS EDITOR (reutilizable) ──────────────────────────────────────────────
+function LinksEditor({links, onChange}) {
+  const addLink = () => onChange([...(links||[]), {label:'', url:''}]);
+  const updateLink = (i, field, val) => onChange((links||[]).map((l,j)=>j===i?{...l,[field]:val}:l));
+  const removeLink = (i) => onChange((links||[]).filter((_,j)=>j!==i));
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+      React.createElement('label',{className:'label'},'🔗 Links'),
+      React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:addLink},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
+    ),
+    (links||[]).map((l,i)=>React.createElement('div',{key:i,className:'link-row',style:{marginBottom:8}},
+      React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>updateLink(i,'label',e.target.value)}),
+      React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>updateLink(i,'url',e.target.value)}),
+      React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>removeLink(i)},React.createElement(Icon,{name:'x',size:13}))
+    ))
   );
 }
 
@@ -353,18 +365,11 @@ function IconPicker({value, onChange, icons, label='Ícono'}) {
     React.createElement('label',{className:'label'},label),
     React.createElement('div',{className:'icon-grid'},
       icons.map(ic=>React.createElement('button',{
-        key:ic,
-        className:`icon-btn${value===ic?' selected':''}`,
-        onClick:()=>onChange(ic),
-        title:ic
+        key:ic, className:`icon-btn${value===ic?' selected':''}`,
+        onClick:()=>onChange(ic), title:ic
       },ic))
     )
   );
-}
-
-function renderIcon(iconValue, size=22) {
-  if(!iconValue) return '🎯';
-  return iconValue;
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -390,9 +395,7 @@ const NotifManager = {
     if(existing[key]) clearTimeout(existing[key]);
     window._notifTimers = existing;
     window._notifTimers[key] = setTimeout(() => {
-      if(Notification.permission==='granted') {
-        NotifManager._send(title, body, key);
-      }
+      if(Notification.permission==='granted') NotifManager._send(title, body, key);
     }, Math.min(delay, 2147483647));
   },
   async _send(title, body, tag) {
@@ -508,38 +511,6 @@ function AuthPage({onAuth}) {
           : React.createElement('span',null,'¿Ya tenés cuenta? ',React.createElement('span',{style:{color:'var(--accent)',cursor:'pointer',fontWeight:600},onClick:()=>{setTab('login');setError('');}}, 'Iniciá sesión'))
       )
     )
-  );
-}
-
-// ─── NOTIFICATIONS PANEL ──────────────────────────────────────────────────────
-function NotificationsPanel({state, showToast}) {
-  const [perm, setPerm] = useState(NotifManager.permission);
-  const requestPerm = async () => {
-    const res = await NotifManager.request();
-    setPerm(res);
-    if(res==='granted') { NotifManager.scheduleAll(state); showToast('Notificaciones activadas ✅'); }
-    else if(res==='denied') showToast('Permiso denegado.','error');
-  };
-  return React.createElement('div',{className:'card'},
-    React.createElement('div',{className:'card-title'},'🔔 Notificaciones'),
-    perm==='default' && React.createElement('div',null,
-      React.createElement('div',{className:'notif-banner'},
-        React.createElement('span',{style:{fontSize:20}},'🔔'),
-        React.createElement('div',{style:{flex:1}},
-          React.createElement('div',{style:{fontWeight:700,fontSize:13}},'Activá las notificaciones'),
-          React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'Recibí recordatorios 15 min antes de eventos.')
-        ),
-        React.createElement('button',{className:'btn btn-primary btn-sm',onClick:requestPerm},'Activar')
-      )
-    ),
-    perm==='granted' && React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:10,fontSize:13}},
-      React.createElement('span',{style:{fontSize:18}},'✅'),
-      React.createElement('div',null,
-        React.createElement('div',{style:{fontWeight:700}},'Notificaciones activas'),
-        React.createElement('div',{style:{color:'var(--text3)',fontSize:12}},'Recibirás recordatorios 15 min antes de cada evento.')
-      )
-    ),
-    perm==='denied' && React.createElement('div',{style:{color:'var(--red)',fontSize:13,padding:'12px 0'}},'🚫 Notificaciones bloqueadas. Activalas desde la configuración de tu navegador.')
   );
 }
 
@@ -775,7 +746,7 @@ function FixedWeekCalendar({subjects, events, activities, tasks, onSlotClick}) {
   return React.createElement(WeekCalendarGrid,{weekDates,subjects,events,activities,tasks,onSlotClick,onEventClick:null});
 }
 
-// ─── MONTH VIEW (fixed item counting) ────────────────────────────────────────
+// ─── MONTH VIEW ────────────────────────────────────────────────────────────────
 function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
   const [popup, setPopup] = useState(null);
   const yr=curr.getFullYear(),mo=curr.getMonth();
@@ -798,7 +769,7 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
         cells.map((c,i)=>{
           const evs=events.filter(e=>e.date===c.date);
           const cellDate=new Date(c.date+'T12:00:00');
-          const dayOfWeek=cellDate.getDay(); // 0=Dom..6=Sab — matches DAY_IDX correctly
+          const dayOfWeek=cellDate.getDay();
           const subs=subjects.filter(s=>{
             if(!isSubjectActiveOnDate(s,c.date)) return false;
             return getSubjectSchedulesForDay(s,dayOfWeek).length>0;
@@ -810,8 +781,6 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
             return true;
           });
           const tasksDue=(tasks||[]).filter(t=>t.dueDate===c.date&&t.status!=='completada');
-
-          // Build ALL items, show first 2, correct "+N more"
           const allItems = [
             ...subs.map(s=>({label:'📚 '+s.name,color:s.color+'cc'})),
             ...acts.map(a=>({label:(a.icon||'🏃')+' '+a.name,color:a.color+'cc'})),
@@ -820,7 +789,6 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
           ];
           const shown=allItems.slice(0,2);
           const moreCount=allItems.length-shown.length;
-
           return React.createElement('div',{
             key:i,
             className:`cal-day${!c.curr?' other-month':''}${c.date===ts?' today':''}`,
@@ -980,7 +948,7 @@ function Calendar({state,setState,showToast}) {
 
   const nav=dir=>{const d=new Date(curr);if(view==='month')d.setMonth(d.getMonth()+dir);else if(view==='week')d.setDate(d.getDate()+dir*7);else d.setDate(d.getDate()+dir);setCurr(d);};
   const lbl=()=>{if(view==='month')return`${MONTHS[curr.getMonth()]} ${curr.getFullYear()}`;if(view==='week'){const s=new Date(curr);s.setDate(s.getDate()-s.getDay());const e=new Date(s);e.setDate(e.getDate()+6);return`${s.getDate()} - ${e.getDate()} ${MONTHS[s.getMonth()]}`;}return`${curr.getDate()} de ${MONTHS[curr.getMonth()]}`;};
-  const openNew=(date,start)=>{setEditEv(null);setForm({...blank,date:date||todayStr(),start:start||'09:00'});setModal(true);};
+  const openNew=(date,start)=>{setEditEv(null);setForm({...blank,date:date||todayStr(),start:start||'09:00',links:[]});setModal(true);};
   const openEdit=ev=>{setEditEv(ev);setForm({...blank,...ev,links:ev.links||[],activity:ev.activity||''});setModal(true);};
   const save=()=>{
     if(!form.title.trim()) return;
@@ -1032,7 +1000,6 @@ function Calendar({state,setState,showToast}) {
             ['facultad','extracurricular','trabajo','ejercicio','personal','hogar'].map(c=>React.createElement('option',{key:c,value:c},c))
           )
         ),
-        // Materia selector para facultad
         state.subjects.length>0&&form.category==='facultad'&&React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'Materia (opcional)'),
           React.createElement('select',{className:'input select',value:form.subject,onChange:F('subject')},
@@ -1040,7 +1007,6 @@ function Calendar({state,setState,showToast}) {
             state.subjects.map(s=>React.createElement('option',{key:s.id,value:s.name},s.name))
           )
         ),
-        // Actividad selector para extracurricular
         (state.activities||[]).length>0&&form.category==='extracurricular'&&React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'Actividad (opcional)'),
           React.createElement('select',{className:'input select',value:form.activity||'',onChange:F('activity')},
@@ -1054,17 +1020,7 @@ function Calendar({state,setState,showToast}) {
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Fecha'),React.createElement('input',{className:'input',type:'date',value:form.date,onChange:F('date')})),
         !selectedSub&&React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
-        React.createElement('div',null,
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
-            React.createElement('label',{className:'label'},'🔗 Links'),
-            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}))},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
-          ),
-          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
-            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Zoom',value:l.label,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,label:e.target.value}:x)}))}),
-            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,url:e.target.value}:x)}))}),
-            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>setForm(f=>({...f,links:f.links.filter((_,j)=>j!==i)}))},React.createElement(Icon,{name:'x',size:13}))
-          ))
-        ),
+        React.createElement(LinksEditor,{links:form.links||[],onChange:v=>setForm(f=>({...f,links:v}))}),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:8}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editEv&&React.createElement('button',{className:'btn btn-danger',onClick:()=>del(editEv.id)},React.createElement(Icon,{name:'trash',size:16}))
@@ -1153,7 +1109,7 @@ function Faculty({state,setState,showToast}) {
             React.createElement('div',{className:'text-sm text-muted',style:{marginTop:2}},getDaysLabel(s)),
             React.createElement('div',{className:'text-xs text-muted',style:{marginTop:2}},getTimeLabel(s)),
             s.notes&&React.createElement('div',{style:{marginTop:10,fontSize:12,color:'var(--text2)',background:'var(--bg3)',borderRadius:8,padding:'8px 10px',borderLeft:`3px solid ${s.color}44`,lineHeight:1.6,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden',fontStyle:'italic'}},s.notes),
-            (s.links||[]).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
+            (s.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
               (s.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',onClick:e=>e.stopPropagation(),style:{fontSize:11,color:s.color,background:s.color+'18',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600}},'🔗 '+(l.label||'Link'+(i+1))))
             )
           ),
@@ -1182,18 +1138,8 @@ function Faculty({state,setState,showToast}) {
           React.createElement('label',{className:'label'},'📝 Notas'),
           React.createElement('textarea',{className:'input',rows:4,placeholder:'Apuntes, links, profesor, bibliografía...',value:form.notes||'',onChange:e=>setForm(f=>({...f,notes:e.target.value})),style:{resize:'vertical',lineHeight:1.6,fontSize:13}})
         ),
-        React.createElement('div',null,
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
-            React.createElement('label',{className:'label'},'🔗 Links'),
-            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}))},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
-          ),
-          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
-            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,label:e.target.value}:x)}))}),
-            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,url:e.target.value}:x)}))}),
-            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>setForm(f=>({...f,links:f.links.filter((_,j)=>j!==i)}))},React.createElement(Icon,{name:'x',size:13}))
-          ))
-        ),
-        React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center'},onClick:save},'Guardar Materia')
+        React.createElement(LinksEditor,{links:form.links||[],onChange:v=>setForm(f=>({...f,links:v}))}),
+        React.createElement('button',{className:'btn btn-primary w-full',style:{justifyContent:'center',marginTop:4},onClick:save},'Guardar Materia')
       )
     )
   );
@@ -1236,7 +1182,7 @@ function Activities({state,setState,showToast}) {
               a.startDate&&a.endDate?`📆 ${a.startDate} → ${a.endDate}`:a.startDate?`📆 Desde ${a.startDate}`:`📆 Hasta ${a.endDate}`
             ),
             a.notes&&React.createElement('div',{style:{marginTop:8,fontSize:12,color:'var(--text2)',background:'var(--bg3)',borderRadius:7,padding:'6px 8px',borderLeft:`2px solid ${a.color}`,lineHeight:1.5,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}},a.notes),
-            (a.links||[]).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
+            (a.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}},
               (a.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',onClick:e=>e.stopPropagation(),style:{fontSize:11,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600}},'🔗 '+(l.label||l.url)))
             )
           ),
@@ -1256,17 +1202,7 @@ function Activities({state,setState,showToast}) {
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'📝 Notas (opcional)'),React.createElement('textarea',{className:'input',rows:3,placeholder:'Profesor, dirección, descripción...',value:form.notes||'',onChange:e=>setForm(f=>({...f,notes:e.target.value})),style:{resize:'vertical',fontSize:13}})),
-        React.createElement('div',null,
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
-            React.createElement('label',{className:'label'},'🔗 Links'),
-            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}))},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
-          ),
-          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
-            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,label:e.target.value}:x)}))}),
-            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,url:e.target.value}:x)}))}),
-            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>setForm(f=>({...f,links:f.links.filter((_,j)=>j!==i)}))},React.createElement(Icon,{name:'x',size:13}))
-          ))
-        ),
+        React.createElement(LinksEditor,{links:form.links||[],onChange:v=>setForm(f=>({...f,links:v}))}),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editing&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editing.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
@@ -1320,94 +1256,24 @@ function Tasks({state,setState,showToast}) {
   const changeStatus=(id,newStatus)=>setState(s=>({...s,tasks:s.tasks.map(t=>t.id===id?{...t,status:newStatus}:t)}));
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
 
-  // ── Universal drag helpers (mouse + touch) ──
-  const createGhost=(title)=>{
-    const g=document.createElement('div');
-    g.className='kanban-ghost';
-    g.textContent=title;
-    g.style.left='-999px'; g.style.top='-999px';
-    document.body.appendChild(g);
-    return g;
-  };
-  const moveGhost=(g,cx,cy)=>{
-    g.style.left=(cx+12)+'px';
-    g.style.top=(cy-20)+'px';
-  };
-  const getColAtPoint=(cx,cy)=>{
-    const cols=dragRef.current.colEls;
-    for(const [status,el] of Object.entries(cols)){
-      if(!el) continue;
-      const r=el.getBoundingClientRect();
-      if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom) return status;
-    }
-    return null;
-  };
-  const endDrag=(targetCol)=>{
-    const {id,ghost}=dragRef.current;
-    if(ghost){ghost.remove();dragRef.current.ghost=null;}
-    if(id&&targetCol) changeStatus(id,targetCol);
-    dragRef.current.id=null;
-    setDragId(null);
-    setDropCol(null);
-  };
+  const createGhost=(title)=>{const g=document.createElement('div');g.className='kanban-ghost';g.textContent=title;g.style.left='-999px';g.style.top='-999px';document.body.appendChild(g);return g;};
+  const moveGhost=(g,cx,cy)=>{g.style.left=(cx+12)+'px';g.style.top=(cy-20)+'px';};
+  const getColAtPoint=(cx,cy)=>{const cols=dragRef.current.colEls;for(const [status,el] of Object.entries(cols)){if(!el)continue;const r=el.getBoundingClientRect();if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom)return status;}return null;};
+  const endDrag=(targetCol)=>{const {id,ghost}=dragRef.current;if(ghost){ghost.remove();dragRef.current.ghost=null;}if(id&&targetCol)changeStatus(id,targetCol);dragRef.current.id=null;setDragId(null);setDropCol(null);};
 
-  // Mouse handlers
   const onMouseDown=(e,task)=>{
     if(e.button!==0) return;
-    // small delay so clicks still work
-    const startX=e.clientX, startY=e.clientY;
-    let started=false;
-    const onMove=(mv)=>{
-      if(!started&&(Math.abs(mv.clientX-startX)>6||Math.abs(mv.clientY-startY)>6)){
-        started=true;
-        dragRef.current.id=task.id;
-        dragRef.current.ghost=createGhost(task.title);
-        setDragId(task.id);
-      }
-      if(started){
-        moveGhost(dragRef.current.ghost,mv.clientX,mv.clientY);
-        setDropCol(getColAtPoint(mv.clientX,mv.clientY));
-      }
-    };
-    const onUp=(up)=>{
-      window.removeEventListener('mousemove',onMove);
-      window.removeEventListener('mouseup',onUp);
-      if(started) endDrag(getColAtPoint(up.clientX,up.clientY));
-    };
-    window.addEventListener('mousemove',onMove);
-    window.addEventListener('mouseup',onUp);
+    const startX=e.clientX, startY=e.clientY;let started=false;
+    const onMove=(mv)=>{if(!started&&(Math.abs(mv.clientX-startX)>6||Math.abs(mv.clientY-startY)>6)){started=true;dragRef.current.id=task.id;dragRef.current.ghost=createGhost(task.title);setDragId(task.id);}if(started){moveGhost(dragRef.current.ghost,mv.clientX,mv.clientY);setDropCol(getColAtPoint(mv.clientX,mv.clientY));}};
+    const onUp=(up)=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);if(started)endDrag(getColAtPoint(up.clientX,up.clientY));};
+    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
   };
 
-  // Touch handlers
   const onTouchStart=(e,task)=>{
-    const t0=e.touches[0];
-    const startX=t0.clientX, startY=t0.clientY;
-    let started=false;
-    const onMove=(mv)=>{
-      const t=mv.touches[0];
-      if(!started&&(Math.abs(t.clientX-startX)>8||Math.abs(t.clientY-startY)>8)){
-        started=true;
-        mv.preventDefault();
-        dragRef.current.id=task.id;
-        dragRef.current.ghost=createGhost(task.title);
-        setDragId(task.id);
-      }
-      if(started){
-        mv.preventDefault();
-        moveGhost(dragRef.current.ghost,t.clientX,t.clientY);
-        setDropCol(getColAtPoint(t.clientX,t.clientY));
-      }
-    };
-    const onEnd=(ev)=>{
-      e.target.removeEventListener('touchmove',onMove);
-      e.target.removeEventListener('touchend',onEnd);
-      if(started){
-        const lt=ev.changedTouches[0];
-        endDrag(getColAtPoint(lt.clientX,lt.clientY));
-      }
-    };
-    e.target.addEventListener('touchmove',onMove,{passive:false});
-    e.target.addEventListener('touchend',onEnd);
+    const t0=e.touches[0];const startX=t0.clientX,startY=t0.clientY;let started=false;
+    const onMove=(mv)=>{const t=mv.touches[0];if(!started&&(Math.abs(t.clientX-startX)>8||Math.abs(t.clientY-startY)>8)){started=true;mv.preventDefault();dragRef.current.id=task.id;dragRef.current.ghost=createGhost(task.title);setDragId(task.id);}if(started){mv.preventDefault();moveGhost(dragRef.current.ghost,t.clientX,t.clientY);setDropCol(getColAtPoint(t.clientX,t.clientY));}};
+    const onEnd=(ev)=>{e.target.removeEventListener('touchmove',onMove);e.target.removeEventListener('touchend',onEnd);if(started){const lt=ev.changedTouches[0];endDrag(getColAtPoint(lt.clientX,lt.clientY));}};
+    e.target.addEventListener('touchmove',onMove,{passive:false});e.target.addEventListener('touchend',onEnd);
   };
 
   const registerCol=(status,el)=>{dragRef.current.colEls[status]=el;};
@@ -1418,49 +1284,25 @@ function Tasks({state,setState,showToast}) {
     {status:'completada',label:'✅ Completada',color:'var(--green)'},
   ];
 
-  // ── KanbanCard — desktop full, mobile compact ──
   const KanbanCard=({task, compact=false})=>{
     const isDragging=dragId===task.id;
     if(compact){
-      // Mobile compact row: priority strip left, title + badge inline, move buttons right
       const nextStatus={pendiente:'en-progreso','en-progreso':'completada',completada:'pendiente'};
       const nextLabel={pendiente:'▶','en-progreso':'✅',completada:'↩'};
-      return React.createElement('div',{style:{
-        display:'flex',alignItems:'center',gap:10,
-        background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,
-        padding:'10px 12px',marginBottom:8,
-        borderLeft:'4px solid '+PC[task.priority],
-        touchAction:'auto',userSelect:'none'
-      }},
+      return React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,padding:'10px 12px',marginBottom:8,borderLeft:'4px solid '+PC[task.priority],touchAction:'auto',userSelect:'none'}},
         React.createElement('div',{style:{flex:1,minWidth:0}},
           React.createElement('div',{style:{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}},task.title),
           React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
-            (task.subject||task.activity)&&React.createElement('span',{style:{
-              fontSize:10,fontWeight:700,color:task.subject?'var(--accent)':'var(--orange)',
-              background:task.subject?'var(--accent-glow)':'rgba(251,146,60,0.15)',
-              padding:'1px 7px',borderRadius:8,maxWidth:130,
-              overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block'
-            }},task.subject||task.activity),
+            (task.subject||task.activity)&&React.createElement('span',{style:{fontSize:10,fontWeight:700,color:task.subject?'var(--accent)':'var(--orange)',background:task.subject?'var(--accent-glow)':'rgba(251,146,60,0.15)',padding:'1px 7px',borderRadius:8,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block'}},task.subject||task.activity),
             task.dueDate&&React.createElement('span',{style:{fontSize:10,color:'var(--text3)'}},'📅 '+task.dueDate)
           )
         ),
         React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
-          React.createElement('button',{
-            style:{width:30,height:30,borderRadius:8,border:'none',background:'var(--bg3)',
-              color:'var(--text2)',fontSize:14,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'},
-            onMouseDown:e=>e.stopPropagation(),
-            onClick:e=>{e.stopPropagation();changeStatus(task.id,nextStatus[task.status]);}
-          },nextLabel[task.status]),
-          React.createElement('button',{
-            style:{width:30,height:30,borderRadius:8,border:'none',background:'var(--bg3)',
-              color:'var(--text3)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'},
-            onMouseDown:e=>e.stopPropagation(),
-            onClick:e=>{e.stopPropagation();openEdit(task);}
-          },React.createElement(Icon,{name:'edit',size:12}))
+          React.createElement('button',{style:{width:30,height:30,borderRadius:8,border:'none',background:'var(--bg3)',color:'var(--text2)',fontSize:14,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'},onMouseDown:e=>e.stopPropagation(),onClick:e=>{e.stopPropagation();changeStatus(task.id,nextStatus[task.status]);}},nextLabel[task.status]),
+          React.createElement('button',{style:{width:30,height:30,borderRadius:8,border:'none',background:'var(--bg3)',color:'var(--text3)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'},onMouseDown:e=>e.stopPropagation(),onClick:e=>{e.stopPropagation();openEdit(task);}},React.createElement(Icon,{name:'edit',size:12}))
         )
       );
     }
-    // Desktop full card
     return React.createElement('div',{
       className:`kanban-card${isDragging?' dragging':''}`,
       onMouseDown:e=>onMouseDown(e,task),
@@ -1474,6 +1316,9 @@ function Tasks({state,setState,showToast}) {
         task.dueDate&&React.createElement('span',{style:{fontSize:10,color:'var(--text3)'}},React.createElement(Icon,{name:'calendar',size:10}),' ',task.dueDate)
       ),
       task.notes&&React.createElement('div',{style:{fontSize:11,color:'var(--text3)',marginTop:6,lineHeight:1.4,overflow:'hidden',textOverflow:'ellipsis',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}},task.notes),
+      (task.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginTop:6}},
+        (task.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',onClick:e=>e.stopPropagation(),style:{fontSize:10,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 6px',borderRadius:6,textDecoration:'none',fontWeight:600}},'🔗 '+(l.label||'Link')))
+      ),
       React.createElement('div',{className:'kanban-card-actions'},
         React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{width:26,height:26,color:'var(--text3)'},onMouseDown:e=>e.stopPropagation(),onClick:(e)=>{e.stopPropagation();openEdit(task);}},React.createElement(Icon,{name:'edit',size:11})),
         React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{width:26,height:26,color:'var(--text3)'},onMouseDown:e=>e.stopPropagation(),onClick:(e)=>{e.stopPropagation();del(task.id);}},React.createElement(Icon,{name:'trash',size:11}))
@@ -1484,56 +1329,16 @@ function Tasks({state,setState,showToast}) {
   const [mobileCol,setMobileCol]=useState('pendiente');
   const isMob=window.innerWidth<=768;
 
-  // ── Mobile view: tab selector + compact list ──
   const MobileTaskView=()=>{
     const colTasks=getCol(mobileCol);
     return React.createElement('div',null,
-      // Column tab switcher
       React.createElement('div',{style:{display:'flex',gap:4,marginBottom:14,background:'var(--bg3)',padding:4,borderRadius:14}},
-        COLS.map(c=>{
-          const cnt=getCol(c.status).length;
-          const active=mobileCol===c.status;
-          return React.createElement('button',{
-            key:c.status,
-            onClick:()=>setMobileCol(c.status),
-            style:{
-              flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:5,
-              padding:'9px 6px',borderRadius:10,border:'none',cursor:'pointer',
-              background:active?'var(--bg2)':'transparent',
-              fontFamily:'var(--font)',fontWeight:700,fontSize:12,
-              color:active?c.color:'var(--text3)',
-              boxShadow:active?'0 2px 8px rgba(0,0,0,0.25)':'',
-              transition:'all 0.15s'
-            }
-          },
-            React.createElement('span',null,c.label.split(' ')[0]),
-            React.createElement('span',{style:{
-              fontSize:11,fontWeight:800,
-              background:active?c.color+'22':'var(--bg3)',
-              color:active?c.color:'var(--text3)',
-              border:active?'1px solid '+c.color:'1px solid var(--border)',
-              borderRadius:8,padding:'0px 6px',lineHeight:'18px'
-            }},cnt)
-          );
-        })
+        COLS.map(c=>{const cnt=getCol(c.status).length;const active=mobileCol===c.status;return React.createElement('button',{key:c.status,onClick:()=>setMobileCol(c.status),style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:5,padding:'9px 6px',borderRadius:10,border:'none',cursor:'pointer',background:active?'var(--bg2)':'transparent',fontFamily:'var(--font)',fontWeight:700,fontSize:12,color:active?c.color:'var(--text3)',boxShadow:active?'0 2px 8px rgba(0,0,0,0.25)':'',transition:'all 0.15s'}},React.createElement('span',null,c.label.split(' ')[0]),React.createElement('span',{style:{fontSize:11,fontWeight:800,background:active?c.color+'22':'var(--bg3)',color:active?c.color:'var(--text3)',border:active?'1px solid '+c.color:'1px solid var(--border)',borderRadius:8,padding:'0px 6px',lineHeight:'18px'}},cnt));})
       ),
-      // Active col label
-      React.createElement('div',{style:{
-        fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',
-        color:COLS.find(c=>c.status===mobileCol).color,
-        marginBottom:10,paddingLeft:4
-      }},COLS.find(c=>c.status===mobileCol).label),
-      // Compact task list
-      colTasks.length===0&&React.createElement('div',{style:{
-        textAlign:'center',padding:'28px 16px',color:'var(--text3)',
-        fontSize:13,border:'2px dashed var(--border)',borderRadius:12
-      }},'Sin tareas en esta columna 🎉'),
+      React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:COLS.find(c=>c.status===mobileCol).color,marginBottom:10,paddingLeft:4}},COLS.find(c=>c.status===mobileCol).label),
+      colTasks.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'28px 16px',color:'var(--text3)',fontSize:13,border:'2px dashed var(--border)',borderRadius:12}},'Sin tareas en esta columna 🎉'),
       colTasks.map(task=>React.createElement(KanbanCard,{key:task.id,task,compact:true})),
-      // Quick move hint
-      colTasks.length>0&&React.createElement('div',{style:{
-        textAlign:'center',fontSize:11,color:'var(--text3)',marginTop:8,
-        padding:'8px',background:'var(--bg3)',borderRadius:8
-      }},'Tocá ▶ para mover a la siguiente columna')
+      colTasks.length>0&&React.createElement('div',{style:{textAlign:'center',fontSize:11,color:'var(--text3)',marginTop:8,padding:'8px',background:'var(--bg3)',borderRadius:8}},'Tocá ▶ para mover a la siguiente columna')
     );
   };
 
@@ -1546,35 +1351,19 @@ function Tasks({state,setState,showToast}) {
       filterBtns.map(([v,l])=>React.createElement('button',{key:v,className:`btn btn-sm ${filter===v?'btn-primary':'btn-ghost'}`,onClick:()=>setFilter(v)},l))
     ),
     !isMob&&React.createElement('div',{style:{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}},
-      COLS.map(col=>{
-        const count=getCol(col.status).length;
-        return React.createElement('div',{key:col.status,style:{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:20,fontSize:12,fontWeight:600}},
-          React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:col.color}}),
-          col.label.replace(/^[^\s]+ /,''),
-          React.createElement('span',{style:{color:col.color,marginLeft:4}},count)
-        );
-      })
+      COLS.map(col=>{const count=getCol(col.status).length;return React.createElement('div',{key:col.status,style:{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:20,fontSize:12,fontWeight:600}},React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:col.color}}),col.label.replace(/^[^\s]+ /,''),React.createElement('span',{style:{color:col.color,marginLeft:4}},count));})
     ),
     isMob ? React.createElement(MobileTaskView,null) :
     React.createElement('div',{className:'kanban-board'},
       COLS.map(col=>{
         const colTasks=getCol(col.status);
         const isDropTarget=dropCol===col.status&&dragId!==null;
-        return React.createElement('div',{
-          key:col.status,
-          ref:el=>registerCol(col.status,el),
-          className:`kanban-col${isDropTarget?' drop-target':''}`,
-        },
+        return React.createElement('div',{key:col.status,ref:el=>registerCol(col.status,el),className:`kanban-col${isDropTarget?' drop-target':''}`},
           React.createElement('div',{className:'kanban-col-header'},
             React.createElement('div',{className:'kanban-col-title',style:{color:col.color}},col.label),
             React.createElement('div',{className:'kanban-col-count'},colTasks.length)
           ),
-          colTasks.length===0&&React.createElement('div',{style:{
-            textAlign:'center',padding:'24px 12px',color:'var(--text3)',
-            fontSize:12,border:'2px dashed var(--border)',borderRadius:10,
-            opacity:isDropTarget?1:0.6,background:isDropTarget?'var(--accent-glow)':'transparent',
-            transition:'background 0.15s'
-          }},isDropTarget?'✦ Soltar acá':'Arrastrá tareas acá'),
+          colTasks.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'24px 12px',color:'var(--text3)',fontSize:12,border:'2px dashed var(--border)',borderRadius:10,opacity:isDropTarget?1:0.6,background:isDropTarget?'var(--accent-glow)':'transparent',transition:'background 0.15s'}},isDropTarget?'✦ Soltar acá':'Arrastrá tareas acá'),
           colTasks.map(task=>React.createElement(KanbanCard,{key:task.id,task}))
         );
       })
@@ -1622,6 +1411,7 @@ function Tasks({state,setState,showToast}) {
           React.createElement('label',{className:'label'},'📝 Notas (opcional)'),
           React.createElement('textarea',{className:'input',rows:2,placeholder:'Notas adicionales...',value:form.notes||'',onChange:F('notes'),style:{resize:'vertical'}})
         ),
+        React.createElement(LinksEditor,{links:form.links||[],onChange:v=>setForm(f=>({...f,links:v}))}),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar Tarea'),
           editingTask&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editingTask.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
@@ -1651,22 +1441,13 @@ function Habits({state,setState,showToast}) {
     })}));
   },[]);
 
-  const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{
-    if(h.id!==hid) return h;
-    const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];
-    return {...h,done,streak:done.length};
-  })}));
+  const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{if(h.id!==hid)return h;const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];return {...h,done,streak:done.length};})}));
   const openNew=()=>{setEditing(null);setForm({name:'',icon:'⭐'});setModal(true);};
   const openEdit=h=>{setEditing(h);setForm({name:h.name,icon:h.icon});setModal(true);};
   const save=()=>{
     if(!form.name.trim()) return;
-    if(editing){
-      setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon}:h)}));
-      showToast('Hábito actualizado');
-    } else {
-      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,history:[]}]}));
-      showToast('Hábito agregado');
-    }
+    if(editing){setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon}:h)}));showToast('Hábito actualizado');}
+    else{setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,history:[]}]}));showToast('Hábito agregado');}
     setModal(false);setEditing(null);setForm({name:'',icon:'⭐'});
   };
   const del=id=>{setState(s=>({...s,habits:s.habits.filter(h=>h.id!==id)}));showToast('Hábito eliminado');};
@@ -1674,12 +1455,7 @@ function Habits({state,setState,showToast}) {
   const totH=state.habits.length*7,doneH=state.habits.reduce((a,h)=>a+h.done.length,0);
   const wPct=Math.round(doneH/Math.max(totH,1)*100);
 
-  const weekKeys=useMemo(()=>{
-    const keys=new Set([currentWeek]);
-    state.habits.forEach(h=>(h.history||[]).forEach(e=>keys.add(e.week)));
-    return [...keys].sort().reverse().slice(0,8);
-  },[state.habits]);
-
+  const weekKeys=useMemo(()=>{const keys=new Set([currentWeek]);state.habits.forEach(h=>(h.history||[]).forEach(e=>keys.add(e.week)));return [...keys].sort().reverse().slice(0,8);},[state.habits]);
   const fmtWeek=(wk)=>{if(!wk)return'';const[yr,wn]=wk.split('-W');return`Sem ${wn} / ${yr}`;};
 
   return React.createElement('div',null,
@@ -1688,9 +1464,7 @@ function Habits({state,setState,showToast}) {
       React.createElement('button',{className:'btn btn-primary',onClick:openNew},React.createElement(Icon,{name:'plus',size:16}),'Hábito')
     ),
     React.createElement('div',{className:'tabs',style:{marginBottom:20,maxWidth:320}},
-      [['semana','Esta Semana'],['historial','Historial']].map(([v,l])=>
-        React.createElement('button',{key:v,className:`tab${activeTab===v?' active':''}`,onClick:()=>setActiveTab(v)},l)
-      )
+      [['semana','Esta Semana'],['historial','Historial']].map(([v,l])=>React.createElement('button',{key:v,className:`tab${activeTab===v?' active':''}`,onClick:()=>setActiveTab(v)},l))
     ),
     activeTab==='semana'&&React.createElement('div',null,
       React.createElement('div',{className:'card',style:{marginBottom:20}},
@@ -1728,11 +1502,7 @@ function Habits({state,setState,showToast}) {
       state.habits.length===0
         ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Sin hábitos cargados.')
         : weekKeys.length<=1&&state.habits.every(h=>!(h.history&&h.history.length>0))
-          ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},
-              React.createElement('div',{style:{fontSize:32,marginBottom:12}},'📅'),
-              React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'El historial se acumula con el tiempo'),
-              React.createElement('div',{style:{fontSize:13}},'Cada semana se guarda tu progreso aquí.')
-            )
+          ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},React.createElement('div',{style:{fontSize:32,marginBottom:12}},'📅'),React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'El historial se acumula con el tiempo'),React.createElement('div',{style:{fontSize:13}},'Cada semana se guarda tu progreso aquí.'))
           : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:12}},
               weekKeys.map(wk=>React.createElement('div',{key:wk,className:'card',style:{padding:20}},
                 React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}},
@@ -1783,12 +1553,7 @@ function Focus({state,setState,showToast}) {
   const actObj=(state.activities||[]).find(a=>a.name===activity);
   const subColor=actObj?actObj.color:subObj?subObj.color:'var(--accent)';
   const sessionLabel=actObj?actObj.name:subject||'';
-  const subjectTasks=(state.tasks||[]).filter(t=>{
-    if(t.status==='completada') return false;
-    if(subject&&t.subject===subject) return true;
-    if(activity&&t.activity===activity) return true;
-    return false;
-  });
+  const subjectTasks=(state.tasks||[]).filter(t=>{if(t.status==='completada')return false;if(subject&&t.subject===subject)return true;if(activity&&t.activity===activity)return true;return false;});
   const timerRef=useRef(null);
   const total=(session==='work'?25:5)*60;
   const elapsed=total-(mins*60+secs);
@@ -1806,23 +1571,7 @@ function Focus({state,setState,showToast}) {
   useEffect(()=>{
     if(running){
       if(session==='work'&&!sessionStart) setSessionStart(new Date());
-      timerRef.current=setInterval(()=>{
-        setSecs(s=>{
-          if(s===0){
-            setMins(m=>{
-              if(m===0){
-                setRunning(false);
-                const nx=session==='work'?'break':'work';
-                if(session==='work'){setCount(c=>c+1);if(sessionStart)logSession(sessionStart);setSessionStart(null);}
-                setSession(nx);setMins(nx==='work'?25:5);return nx==='work'?25:5;
-              }
-              return m-1;
-            });
-            return 59;
-          }
-          return s-1;
-        });
-      },1000);
+      timerRef.current=setInterval(()=>{setSecs(s=>{if(s===0){setMins(m=>{if(m===0){setRunning(false);const nx=session==='work'?'break':'work';if(session==='work'){setCount(c=>c+1);if(sessionStart)logSession(sessionStart);setSessionStart(null);}setSession(nx);setMins(nx==='work'?25:5);return nx==='work'?25:5;}return m-1;});return 59;}return s-1;});},1000);
     } else clearInterval(timerRef.current);
     return()=>clearInterval(timerRef.current);
   },[running,session,sessionStart,subject,activity]);
@@ -1836,9 +1585,7 @@ function Focus({state,setState,showToast}) {
     React.createElement('div',{className:'grid-2',style:{gap:24}},
       React.createElement('div',{className:'card',style:{display:'flex',flexDirection:'column',alignItems:'center',padding:40,gap:0}},
         React.createElement('div',{className:'tabs',style:{marginBottom:28,maxWidth:240,width:'100%'}},
-          [['work','🎯 Trabajo'],['break','☕ Descanso']].map(([s,l])=>
-            React.createElement('button',{key:s,className:`tab${session===s?' active':''}`,onClick:()=>{if(!running){setSession(s);setMins(s==='work'?25:5);setSecs(0);}}},l)
-          )
+          [['work','🎯 Trabajo'],['break','☕ Descanso']].map(([s,l])=>React.createElement('button',{key:s,className:`tab${session===s?' active':''}`,onClick:()=>{if(!running){setSession(s);setMins(s==='work'?25:5);setSecs(0);}}},l))
         ),
         React.createElement('div',{style:{position:'relative',width:220,height:220,display:'flex',alignItems:'center',justifyContent:'center'}},
           React.createElement('svg',{style:{position:'absolute',top:0,left:0,transform:'rotate(-90deg)'},width:220,height:220,viewBox:'0 0 200 200'},
@@ -1863,20 +1610,8 @@ function Focus({state,setState,showToast}) {
       React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:20}},
         React.createElement('div',{className:'card',style:{padding:24}},
           React.createElement('div',{className:'card-title'},'Sesión Actual'),
-          React.createElement('div',{className:'form-group',style:{marginBottom:12}},
-            React.createElement('label',{className:'label'},'Materia'),
-            React.createElement('select',{className:'input select',value:subject,onChange:e=>{setSubject(e.target.value);setActivity('');setCheckedTasks({});}},
-              React.createElement('option',{value:''},'— Sin materia —'),
-              state.subjects.map(s=>React.createElement('option',{key:s.id,value:s.name},s.name))
-            )
-          ),
-          React.createElement('div',{className:'form-group'},
-            React.createElement('label',{className:'label'},'Actividad'),
-            React.createElement('select',{className:'input select',value:activity,onChange:e=>{setActivity(e.target.value);if(e.target.value)setSubject('');setCheckedTasks({});}},
-              React.createElement('option',{value:''},'— Sin actividad —'),
-              (state.activities||[]).map(a=>React.createElement('option',{key:a.id,value:a.name},(a.icon||'')+' '+a.name))
-            )
-          )
+          React.createElement('div',{className:'form-group',style:{marginBottom:12}},React.createElement('label',{className:'label'},'Materia'),React.createElement('select',{className:'input select',value:subject,onChange:e=>{setSubject(e.target.value);setActivity('');setCheckedTasks({});}},React.createElement('option',{value:''},'— Sin materia —'),state.subjects.map(s=>React.createElement('option',{key:s.id,value:s.name},s.name)))),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Actividad'),React.createElement('select',{className:'input select',value:activity,onChange:e=>{setActivity(e.target.value);if(e.target.value)setSubject('');setCheckedTasks({});}},React.createElement('option',{value:''},'— Sin actividad —'),(state.activities||[]).map(a=>React.createElement('option',{key:a.id,value:a.name},(a.icon||'')+' '+a.name))))
         ),
         (subject||activity)&&React.createElement('div',{className:'card',style:{padding:24}},
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
@@ -1886,13 +1621,8 @@ function Focus({state,setState,showToast}) {
           subjectTasks.length===0
             ? React.createElement('div',{style:{textAlign:'center',padding:'16px 0',color:'var(--text3)',fontSize:13}},'🎉 ¡Sin tareas pendientes!')
             : subjectTasks.map(t=>React.createElement('div',{key:t.id,style:{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,background:checkedTasks[t.id]?'rgba(74,222,128,0.08)':'var(--bg3)',border:`1px solid ${checkedTasks[t.id]?'rgba(74,222,128,0.3)':'transparent'}`,marginBottom:8,transition:'all 0.2s'}},
-              React.createElement('div',{onClick:()=>toggleTask(t.id),style:{width:22,height:22,borderRadius:6,flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:checkedTasks[t.id]?'var(--green)':'transparent',border:`2px solid ${checkedTasks[t.id]?'var(--green)':'var(--border)'}`,transition:'all 0.2s'}},
-                checkedTasks[t.id]&&React.createElement('svg',{width:12,height:12,viewBox:'0 0 12 12',fill:'none',stroke:'#fff',strokeWidth:2.5},React.createElement('polyline',{points:'2,6 5,9 10,3'}))
-              ),
-              React.createElement('div',{style:{flex:1}},
-                React.createElement('div',{style:{fontSize:13,fontWeight:500,textDecoration:checkedTasks[t.id]?'line-through':'none',color:checkedTasks[t.id]?'var(--text3)':'var(--text)'}},t.title),
-                t.dueDate&&React.createElement('div',{style:{fontSize:11,color:'var(--text3)',marginTop:2}},'📅 Vence: ',t.dueDate)
-              ),
+              React.createElement('div',{onClick:()=>toggleTask(t.id),style:{width:22,height:22,borderRadius:6,flexShrink:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:checkedTasks[t.id]?'var(--green)':'transparent',border:`2px solid ${checkedTasks[t.id]?'var(--green)':'var(--border)'}`,transition:'all 0.2s'}},checkedTasks[t.id]&&React.createElement('svg',{width:12,height:12,viewBox:'0 0 12 12',fill:'none',stroke:'#fff',strokeWidth:2.5},React.createElement('polyline',{points:'2,6 5,9 10,3'}))),
+              React.createElement('div',{style:{flex:1}},React.createElement('div',{style:{fontSize:13,fontWeight:500,textDecoration:checkedTasks[t.id]?'line-through':'none',color:checkedTasks[t.id]?'var(--text3)':'var(--text)'}},t.title),t.dueDate&&React.createElement('div',{style:{fontSize:11,color:'var(--text3)',marginTop:2}},'📅 Vence: ',t.dueDate)),
               checkedTasks[t.id]&&React.createElement('button',{onClick:()=>markTaskDone(t.id),className:'btn btn-sm',style:{background:'var(--green)',color:'#fff',padding:'4px 10px',fontSize:11}},'✓ Hecho')
             ))
         ),
@@ -1916,7 +1646,6 @@ function Notes({state,setState,showToast}) {
   const blankForm={title:'',content:'',subject:'',color:COLORS[0],priority:'media',pinned:false,tags:[],links:[]};
   const [form,setForm]=useState(blankForm);
   const [tagInput,setTagInput]=useState('');
-
   const PC={alta:'var(--red)',media:'var(--yellow)',baja:'var(--green)'};
 
   const openNew=()=>{setEditingNote(null);setForm(blankForm);setTagInput('');setModal(true);};
@@ -1930,21 +1659,12 @@ function Notes({state,setState,showToast}) {
   };
   const del=id=>{setState(s=>({...s,notes:s.notes.filter(n=>n.id!==id)}));showToast('Nota eliminada');};
   const togglePin=id=>setState(s=>({...s,notes:s.notes.map(n=>n.id===id?{...n,pinned:!n.pinned}:n)}));
-
   const addTag=()=>{const t=tagInput.trim();if(!t||form.tags.includes(t))return;setForm(f=>({...f,tags:[...f.tags,t]}));setTagInput('');};
   const removeTag=t=>setForm(f=>({...f,tags:f.tags.filter(x=>x!==t)}));
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
 
-  const sorted=[...state.notes].sort((a,b)=>{
-    if(a.pinned&&!b.pinned) return -1;
-    if(!a.pinned&&b.pinned) return 1;
-    return(b.updatedAt||b.date||'').localeCompare(a.updatedAt||a.date||'');
-  });
-  const filtered=sorted.filter(n=>{
-    if(filterSubject!=='all'&&n.subject!==filterSubject) return false;
-    if(search){const q=search.toLowerCase();return(n.title||'').toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q)||(n.tags||[]).some(t=>t.toLowerCase().includes(q));}
-    return true;
-  });
+  const sorted=[...state.notes].sort((a,b)=>{if(a.pinned&&!b.pinned)return -1;if(!a.pinned&&b.pinned)return 1;return(b.updatedAt||b.date||'').localeCompare(a.updatedAt||a.date||'');});
+  const filtered=sorted.filter(n=>{if(filterSubject!=='all'&&n.subject!==filterSubject)return false;if(search){const q=search.toLowerCase();return(n.title||'').toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q)||(n.tags||[]).some(t=>t.toLowerCase().includes(q));}return true;});
 
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},
@@ -1968,10 +1688,7 @@ function Notes({state,setState,showToast}) {
           React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:8}},
             React.createElement('div',{style:{flex:1,minWidth:0}},
               n.title&&React.createElement('div',{style:{fontWeight:700,fontSize:15,marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},n.title),
-              sub&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4,marginBottom:4}},
-                React.createElement('div',{style:{width:6,height:6,borderRadius:'50%',background:sub.color}}),
-                React.createElement('span',{style:{fontSize:11,fontWeight:700,color:sub.color}},sub.name)
-              )
+              sub&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4,marginBottom:4}},React.createElement('div',{style:{width:6,height:6,borderRadius:'50%',background:sub.color}}),React.createElement('span',{style:{fontSize:11,fontWeight:700,color:sub.color}},sub.name))
             ),
             React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0,marginLeft:8}},
               React.createElement('button',{style:{background:'none',border:'none',color:n.pinned?'var(--yellow)':'var(--text3)',cursor:'pointer',fontSize:14,padding:2},onClick:()=>togglePin(n.id)},'📌'),
@@ -1981,12 +1698,8 @@ function Notes({state,setState,showToast}) {
           ),
           React.createElement('div',{style:{width:40,height:3,borderRadius:4,background:PC[n.priority||'media'],marginBottom:8,opacity:0.7}}),
           n.content&&React.createElement('div',{style:{fontSize:13,lineHeight:1.6,color:'var(--text2)',display:'-webkit-box',WebkitLineClamp:4,WebkitBoxOrient:'vertical',overflow:'hidden',marginBottom:8}},n.content),
-          (n.tags||[]).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}},
-            (n.tags||[]).map(t=>React.createElement('span',{key:t,className:'note-tag'},t))
-          ),
-          (n.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}},
-            (n.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',style:{fontSize:11,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600}},'🔗 '+(l.label||'Link')))
-          ),
+          (n.tags||[]).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}},(n.tags||[]).map(t=>React.createElement('span',{key:t,className:'note-tag'},t))),
+          (n.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}},(n.links||[]).filter(l=>l.url).map((l,i)=>React.createElement('a',{key:i,href:l.url,target:'_blank',rel:'noopener noreferrer',style:{fontSize:11,color:'var(--accent)',background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10,textDecoration:'none',fontWeight:600}},'🔗 '+(l.label||'Link')))),
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:6}},
             React.createElement('div',{style:{fontSize:10,color:'var(--text3)'}},n.updatedAt||n.date),
             React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:PC[n.priority||'media'],opacity:0.8}})
@@ -1996,31 +1709,13 @@ function Notes({state,setState,showToast}) {
     ),
     modal&&React.createElement(Modal,{title:editingNote?'Editar Nota':'Nueva Nota',onClose:()=>setModal(false),wide:true},
       React.createElement('div',{className:'flex flex-col gap-3'},
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título (opcional)'),React.createElement('input',{className:'input',placeholder:'Ej: Resumen Parcial, Idea de proyecto...',value:form.title||'',onChange:F('title'),autoFocus:true})),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título (opcional)'),React.createElement('input',{className:'input',placeholder:'Ej: Resumen Parcial...',value:form.title||'',onChange:F('title'),autoFocus:true})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Contenido'),React.createElement('textarea',{className:'input',rows:5,placeholder:'Escribí tu nota...',value:form.content,onChange:F('content'),style:{resize:'vertical',lineHeight:1.6}})),
         React.createElement('div',{className:'grid-2',style:{gap:12}},
-          React.createElement('div',{className:'form-group'},
-            React.createElement('label',{className:'label'},'Materia (opcional)'),
-            React.createElement('select',{className:'input select',value:form.subject,onChange:F('subject')},
-              React.createElement('option',{value:''},'— General —'),
-              state.subjects.map(s=>React.createElement('option',{key:s.id,value:s.name},s.name))
-            )
-          ),
-          React.createElement('div',{className:'form-group'},
-            React.createElement('label',{className:'label'},'Prioridad'),
-            React.createElement('div',{className:'flex gap-2'},
-              [['alta','Alta'],['media','Media'],['baja','Baja']].map(([v,l])=>
-                React.createElement('button',{key:v,className:`btn btn-sm ${form.priority===v?'btn-primary':'btn-ghost'}`,onClick:()=>setForm(f=>({...f,priority:v}))},l)
-              )
-            )
-          )
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Materia (opcional)'),React.createElement('select',{className:'input select',value:form.subject,onChange:F('subject')},React.createElement('option',{value:''},'— General —'),state.subjects.map(s=>React.createElement('option',{key:s.id,value:s.name},s.name)))),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Prioridad'),React.createElement('div',{className:'flex gap-2'},[['alta','Alta'],['media','Media'],['baja','Baja']].map(([v,l])=>React.createElement('button',{key:v,className:`btn btn-sm ${form.priority===v?'btn-primary':'btn-ghost'}`,onClick:()=>setForm(f=>({...f,priority:v}))},l))))
         ),
-        React.createElement('div',{className:'form-group'},
-          React.createElement('label',{className:'label'},'Opciones'),
-          React.createElement('button',{className:`btn btn-sm ${form.pinned?'btn-primary':'btn-ghost'}`,onClick:()=>setForm(f=>({...f,pinned:!f.pinned}))},
-            '📌 '+(form.pinned?'Fijada':'Fijar nota')
-          )
-        ),
+        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Opciones'),React.createElement('button',{className:`btn btn-sm ${form.pinned?'btn-primary':'btn-ghost'}`,onClick:()=>setForm(f=>({...f,pinned:!f.pinned}))},'📌 '+(form.pinned?'Fijada':'Fijar nota'))),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'label'},'🏷 Etiquetas'),
@@ -2028,23 +1723,9 @@ function Notes({state,setState,showToast}) {
             React.createElement('input',{className:'input',placeholder:'Ej: parcial, resumen...',value:tagInput,onChange:e=>setTagInput(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){e.preventDefault();addTag();}}}),
             React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:addTag},'+')
           ),
-          (form.tags||[]).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4}},
-            (form.tags||[]).map(t=>React.createElement('span',{key:t,className:'note-tag',style:{cursor:'pointer'}},t,' ',
-              React.createElement('span',{onClick:()=>removeTag(t),style:{marginLeft:4,fontWeight:700,opacity:0.6}},'×')
-            ))
-          )
+          (form.tags||[]).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4}},(form.tags||[]).map(t=>React.createElement('span',{key:t,className:'note-tag',style:{cursor:'pointer'}},t,' ',React.createElement('span',{onClick:()=>removeTag(t),style:{marginLeft:4,fontWeight:700,opacity:0.6}},'×'))))
         ),
-        React.createElement('div',null,
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
-            React.createElement('label',{className:'label'},'🔗 Links (opcional)'),
-            React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setForm(f=>({...f,links:[...(f.links||[]),{label:'',url:''}]}))},React.createElement(Icon,{name:'plus',size:13}),' Agregar')
-          ),
-          (form.links||[]).map((l,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:8,marginBottom:8,alignItems:'center'}},
-            React.createElement('input',{className:'input',style:{width:'30%',flexShrink:0},placeholder:'Etiqueta',value:l.label,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,label:e.target.value}:x)}))}),
-            React.createElement('input',{className:'input',style:{flex:1},placeholder:'https://...',value:l.url,onChange:e=>setForm(f=>({...f,links:f.links.map((x,j)=>j===i?{...x,url:e.target.value}:x)}))}),
-            React.createElement('button',{className:'btn btn-danger btn-icon btn-sm',onClick:()=>setForm(f=>({...f,links:f.links.filter((_,j)=>j!==i)}))},React.createElement(Icon,{name:'x',size:13}))
-          ))
-        ),
+        React.createElement(LinksEditor,{links:form.links||[],onChange:v=>setForm(f=>({...f,links:v}))}),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editingNote&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editingNote.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
@@ -2060,8 +1741,16 @@ function Dashboard({state,setPage,user}) {
   const todayEvs = state.events.filter(e=>e.date===todayStr());
   const today = todayStr();
   const in30 = fmtDate(new Date(Date.now()+30*24*60*60*1000));
+
+  // Eventos de facultad próximos (30 días)
   const facultyEvents = state.events
     .filter(e=>e.category==='facultad' && e.date>=today && e.date<=in30)
+    .sort((a,b)=>a.date.localeCompare(b.date))
+    .slice(0,6);
+
+  // Eventos extracurriculares próximos (30 días)
+  const extraEvents = state.events
+    .filter(e=>e.category==='extracurricular' && e.date>=today && e.date<=in30)
     .sort((a,b)=>a.date.localeCompare(b.date))
     .slice(0,6);
 
@@ -2080,8 +1769,50 @@ function Dashboard({state,setPage,user}) {
 
   const getDaysUntil=(dateStr)=>{
     const diff=Math.ceil((new Date(dateStr+'T12:00:00')-now)/(1000*60*60*24));
-    if(diff===0) return'Hoy';if(diff===1)return'Mañana';return`En ${diff} días`;
+    if(diff===0)return'Hoy';if(diff===1)return'Mañana';return`En ${diff} días`;
   };
+
+  // Componente reutilizable para secciones de eventos próximos
+  const ProxEventosSection=({events, title, targetPage, emptyMsg})=>React.createElement('div',{className:'card',style:{padding:28}},
+    React.createElement('div',{className:'flex justify-between items-center',style:{marginBottom:16}},
+      React.createElement('div',{className:'card-title',style:{marginBottom:0}},title),
+      React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setPage(targetPage)},React.createElement(Icon,{name:'chevR',size:14}))
+    ),
+    events.length===0
+      ? React.createElement('div',{style:{textAlign:'center',padding:'20px 0',color:'var(--text3)',fontSize:13}},emptyMsg)
+      : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          events.map(ev=>{
+            const sub=state.subjects.find(s=>s.name===ev.subject);
+            const act=(state.activities||[]).find(a=>a.name===ev.activity);
+            const until=getDaysUntil(ev.date);
+            const isUrgent=ev.date===today||ev.date===fmtDate(new Date(Date.now()+24*60*60*1000));
+            return React.createElement('div',{key:ev.id,style:{
+              display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,
+              background:isUrgent?'rgba(248,113,113,0.06)':'var(--bg3)',
+              borderLeft:`3px solid ${ev.color}`,
+              border:`1px solid ${isUrgent?'rgba(248,113,113,0.2)':'transparent'}`,borderLeftWidth:3
+            }},
+              React.createElement('div',{className:'dot',style:{background:ev.color,flexShrink:0}}),
+              React.createElement('div',{style:{flex:1,minWidth:0}},
+                React.createElement('div',{style:{fontWeight:600,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},ev.title),
+                React.createElement('div',{style:{display:'flex',gap:8,marginTop:3,flexWrap:'wrap'}},
+                  sub&&React.createElement('span',{style:{fontSize:11,color:sub.color,fontWeight:700}},sub.name),
+                  act&&React.createElement('span',{style:{fontSize:11,color:act.color,fontWeight:700}},(act.icon||'🏃')+' '+act.name),
+                  React.createElement('span',{className:'text-xs text-muted'},
+                    new Date(ev.date+'T12:00:00').getDate()+' de '+MONTHS[new Date(ev.date+'T12:00:00').getMonth()],' · ',ev.start
+                  )
+                )
+              ),
+              React.createElement('div',{style:{
+                fontSize:11,fontWeight:700,flexShrink:0,
+                color:isUrgent?'var(--red)':'var(--text3)',
+                background:isUrgent?'rgba(248,113,113,0.1)':'var(--bg2)',
+                padding:'3px 8px',borderRadius:8,border:'1px solid var(--border)'
+              }},until)
+            );
+          })
+        )
+  );
 
   return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:24}},
     React.createElement('div',{className:'page-header'},
@@ -2125,45 +1856,20 @@ function Dashboard({state,setPage,user}) {
           React.createElement('p',{className:'text-sm text-muted',style:{padding:'12px 0'}},'Sin urgentes ✅')
       )
     ),
-    // Eventos de Facultad
-    React.createElement('div',{className:'card',style:{padding:28}},
-      React.createElement('div',{className:'flex justify-between items-center',style:{marginBottom:16}},
-        React.createElement('div',{className:'card-title',style:{marginBottom:0}},'🎓 Próximos Eventos de Facultad'),
-        React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setPage('calendar')},React.createElement(Icon,{name:'chevR',size:14}))
-      ),
-      facultyEvents.length===0
-        ? React.createElement('div',{style:{textAlign:'center',padding:'20px 0',color:'var(--text3)',fontSize:13}},'Sin eventos de facultad en los próximos 30 días')
-        : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
-            facultyEvents.map(ev=>{
-              const sub=state.subjects.find(s=>s.name===ev.subject);
-              const until=getDaysUntil(ev.date);
-              const isUrgent=ev.date===today||ev.date===fmtDate(new Date(Date.now()+24*60*60*1000));
-              return React.createElement('div',{key:ev.id,style:{
-                display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,
-                background:isUrgent?'rgba(248,113,113,0.06)':'var(--bg3)',
-                borderLeft:`3px solid ${ev.color}`,
-                border:`1px solid ${isUrgent?'rgba(248,113,113,0.2)':'transparent'}`,borderLeftWidth:3
-              }},
-                React.createElement('div',{className:'dot',style:{background:ev.color,flexShrink:0}}),
-                React.createElement('div',{style:{flex:1,minWidth:0}},
-                  React.createElement('div',{style:{fontWeight:600,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},ev.title),
-                  React.createElement('div',{style:{display:'flex',gap:8,marginTop:3,flexWrap:'wrap'}},
-                    sub&&React.createElement('span',{style:{fontSize:11,color:sub.color,fontWeight:700}},sub.name),
-                    React.createElement('span',{className:'text-xs text-muted'},
-                      new Date(ev.date+'T12:00:00').getDate()+' de '+MONTHS[new Date(ev.date+'T12:00:00').getMonth()],' · ',ev.start
-                    )
-                  )
-                ),
-                React.createElement('div',{style:{
-                  fontSize:11,fontWeight:700,flexShrink:0,
-                  color:isUrgent?'var(--red)':'var(--text3)',
-                  background:isUrgent?'rgba(248,113,113,0.1)':'var(--bg2)',
-                  padding:'3px 8px',borderRadius:8,border:'1px solid var(--border)'
-                }},until)
-              );
-            })
-          )
-    ),
+    // Eventos de Facultad próximos
+    React.createElement(ProxEventosSection,{
+      events:facultyEvents,
+      title:'🎓 Próximos Eventos de Facultad',
+      targetPage:'calendar',
+      emptyMsg:'Sin eventos de facultad en los próximos 30 días'
+    }),
+    // Eventos Extracurriculares próximos — NUEVA SECCIÓN
+    React.createElement(ProxEventosSection,{
+      events:extraEvents,
+      title:'🏃 Próximos Eventos Extracurriculares',
+      targetPage:'calendar',
+      emptyMsg:'Sin eventos extracurriculares en los próximos 30 días'
+    }),
     React.createElement('div',{className:'grid-2',style:{gap:20}},
       React.createElement('div',{className:'card',style:{padding:28}},
         React.createElement('div',{className:'card-title'},'📚 Materias'),
@@ -2186,9 +1892,7 @@ function Dashboard({state,setPage,user}) {
                   React.createElement('span',{className:'text-sm'},h.icon||'⭐',' ',h.name),
                   React.createElement('span',{className:'text-xs text-muted'},h.streak,' 🔥')
                 ),
-                React.createElement('div',{className:'progress-bar'},
-                  React.createElement('div',{className:'progress-fill',style:{width:pct+'%',background:pct>60?'var(--green)':pct>30?'var(--yellow)':'var(--red)'}})
-                )
+                React.createElement('div',{className:'progress-bar'},React.createElement('div',{className:'progress-fill',style:{width:pct+'%',background:pct>60?'var(--green)':pct>30?'var(--yellow)':'var(--red)'}}))
               );
             })
       )
@@ -2196,59 +1900,89 @@ function Dashboard({state,setPage,user}) {
   );
 }
 
-// ─── PROFILE ─────────────────────────────────────────────────────────────────
-function Profile({user,onLogout,state,showToast}) {
-  const notifPerm=NotifManager.permission;
+// ─── PROFILE (con notificaciones integradas) ──────────────────────────────────
+function Profile({user,onLogout,state,setState,showToast}) {
+  const [notifPerm, setNotifPerm] = useState(NotifManager.permission);
+
+  const requestPerm = async () => {
+    const res = await NotifManager.request();
+    setNotifPerm(res);
+    if(res==='granted') { NotifManager.scheduleAll(state); showToast('Notificaciones activadas ✅'); }
+    else if(res==='denied') showToast('Permiso denegado.','error');
+  };
+
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},React.createElement('h1',{className:'page-title'},'👤 ',React.createElement('span',null,'Mi Perfil'))),
     React.createElement('div',{className:'grid-2',style:{gap:24,alignItems:'start'}},
-      React.createElement('div',{className:'card'},
-        React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:16,marginBottom:28,paddingBottom:24,borderBottom:'1px solid var(--border)'}},
-          React.createElement('div',{style:{width:80,height:80,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),#a78bfa)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:34,fontWeight:800,color:'#fff',boxShadow:'0 8px 24px var(--accent-glow)'}},
-            (user.displayName||user.email||'?')[0].toUpperCase()
+      // Columna izquierda: info de usuario
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:20}},
+        React.createElement('div',{className:'card'},
+          React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:16,marginBottom:28,paddingBottom:24,borderBottom:'1px solid var(--border)'}},
+            React.createElement('div',{style:{width:80,height:80,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),#a78bfa)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:34,fontWeight:800,color:'#fff',boxShadow:'0 8px 24px var(--accent-glow)'}},
+              (user.displayName||user.email||'?')[0].toUpperCase()
+            ),
+            React.createElement('div',{style:{textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:22,fontWeight:700,marginBottom:4}},user.displayName||'Sin nombre'),
+              React.createElement('div',{className:'text-sm text-muted',style:{marginBottom:6}},user.email),
+              React.createElement('div',{style:{display:'inline-flex',alignItems:'center',gap:6,fontSize:11,color:'var(--green)',background:'rgba(74,222,128,0.1)',padding:'4px 12px',borderRadius:20,border:'1px solid rgba(74,222,128,0.2)'}},'● Conectado via Firebase')
+            )
           ),
-          React.createElement('div',{style:{textAlign:'center'}},
-            React.createElement('div',{style:{fontSize:22,fontWeight:700,marginBottom:4}},user.displayName||'Sin nombre'),
-            React.createElement('div',{className:'text-sm text-muted',style:{marginBottom:6}},user.email),
-            React.createElement('div',{style:{display:'inline-flex',alignItems:'center',gap:6,fontSize:11,color:'var(--green)',background:'rgba(74,222,128,0.1)',padding:'4px 12px',borderRadius:20,border:'1px solid rgba(74,222,128,0.2)'}},'● Conectado via Firebase')
+          React.createElement('button',{className:'btn btn-danger',style:{width:'100%',justifyContent:'center'},onClick:onLogout},React.createElement(Icon,{name:'logout',size:16}),' Cerrar Sesión')
+        ),
+        // Notificaciones integradas
+        React.createElement('div',{className:'card'},
+          React.createElement('div',{className:'card-title'},'🔔 Notificaciones'),
+          notifPerm==='default'&&React.createElement('div',null,
+            React.createElement('div',{className:'notif-banner'},
+              React.createElement('span',{style:{fontSize:20}},'🔔'),
+              React.createElement('div',{style:{flex:1}},
+                React.createElement('div',{style:{fontWeight:700,fontSize:13}},'Activá las notificaciones'),
+                React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'Recibí recordatorios 15 min antes de eventos.')
+              ),
+              React.createElement('button',{className:'btn btn-primary btn-sm',onClick:requestPerm},'Activar')
+            )
+          ),
+          notifPerm==='granted'&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:10,fontSize:13}},
+            React.createElement('span',{style:{fontSize:18}},'✅'),
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontWeight:700}},'Notificaciones activas'),
+              React.createElement('div',{style:{color:'var(--text3)',fontSize:12}},'Recibirás recordatorios 15 min antes de cada evento.')
+            )
+          ),
+          notifPerm==='denied'&&React.createElement('div',{style:{color:'var(--red)',fontSize:13,padding:'12px 0'}},'🚫 Notificaciones bloqueadas. Activalas desde la configuración de tu navegador.')
+        )
+      ),
+      // Columna derecha: resumen
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:20}},
+        React.createElement('div',{className:'card'},
+          React.createElement('div',{className:'card-title'},'Resumen de tu cuenta'),
+          [['📚 Materias',state.subjects.length],['🏃 Actividades',state.activities.length],['✅ Tareas',state.tasks.length],['💚 Hábitos',state.habits.length],['📝 Notas',state.notes.length],['📅 Eventos',state.events.length]].map(([l,v])=>
+            React.createElement('div',{key:l,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0',borderBottom:'1px solid var(--border)',fontSize:14}},
+              React.createElement('span',{className:'text-muted'},l),
+              React.createElement('span',{style:{fontWeight:700,fontSize:18,color:'var(--accent)'}},v)
+            )
           )
         ),
-        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
-          React.createElement('button',{className:'btn btn-danger',style:{width:'100%',justifyContent:'center'},onClick:onLogout},React.createElement(Icon,{name:'logout',size:16}),' Cerrar Sesión'),
-          notifPerm!=='granted'&&React.createElement('button',{className:'btn btn-ghost',style:{width:'100%',justifyContent:'center',fontSize:13},onClick:async()=>{const r=await NotifManager.request();if(r==='granted'){NotifManager.scheduleAll(state);showToast('Notificaciones activadas ✅');}else showToast('No se pudo activar notificaciones','error');}},
-            React.createElement(Icon,{name:'bell',size:14}),' Activar notificaciones'
+        React.createElement('div',{className:'card',style:{
+          background:'linear-gradient(135deg,rgba(124,106,247,0.08),rgba(244,114,182,0.08))',
+          border:'1px solid rgba(244,114,182,0.2)',padding:24,textAlign:'center'
+        }},
+          React.createElement('div',{style:{fontSize:28,marginBottom:10}},'✨'),
+          React.createElement('div',{style:{fontSize:14,lineHeight:1.8,color:'var(--text2)'}},
+            'Querido/a usuario/a: si encontrás algún ',React.createElement('strong',{style:{color:'var(--text)'}},'bug'),
+            ', ',React.createElement('strong',{style:{color:'var(--text)'}},'error'),
+            ' o tenés alguna ',React.createElement('strong',{style:{color:'var(--text)'}},'petición'),
+            ', ¡hacéselo saber a su diosa creadora ',
+            React.createElement('span',{style:{color:'var(--pink)',fontWeight:800,fontSize:16,background:'rgba(244,114,182,0.12)',padding:'1px 8px',borderRadius:8}},'Malenit'),'!'
           ),
-          notifPerm==='granted'&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'var(--green)',padding:'6px',background:'rgba(74,222,128,0.08)',borderRadius:8}},'🔔 Notificaciones activas')
-        )
-      ),
-      React.createElement('div',{className:'card'},
-        React.createElement('div',{className:'card-title'},'Resumen de tu cuenta'),
-        [['📚 Materias',state.subjects.length],['🏃 Actividades',state.activities.length],['✅ Tareas',state.tasks.length],['💚 Hábitos',state.habits.length],['📝 Notas',state.notes.length],['📅 Eventos',state.events.length]].map(([l,v])=>
-          React.createElement('div',{key:l,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0',borderBottom:'1px solid var(--border)',fontSize:14}},
-            React.createElement('span',{className:'text-muted'},l),
-            React.createElement('span',{style:{fontWeight:700,fontSize:18,color:'var(--accent)'}},v)
-          )
+          React.createElement('div',{style:{marginTop:10,fontSize:13,color:'var(--text3)',fontStyle:'italic'}},'ありがとう ございます！')
         )
       )
-    ),
-    React.createElement('div',{className:'card',style:{
-      marginTop:4,background:'linear-gradient(135deg,rgba(124,106,247,0.08),rgba(244,114,182,0.08))',
-      border:'1px solid rgba(244,114,182,0.2)',padding:24,textAlign:'center'
-    }},
-      React.createElement('div',{style:{fontSize:28,marginBottom:10}},'✨'),
-      React.createElement('div',{style:{fontSize:14,lineHeight:1.8,color:'var(--text2)'}},
-        'Querido/a usuario/a: si encontrás algún ',React.createElement('strong',{style:{color:'var(--text)'}},'bug'),
-        ', ',React.createElement('strong',{style:{color:'var(--text)'}},'error'),
-        ' o tenés alguna ',React.createElement('strong',{style:{color:'var(--text)'}},'petición'),
-        ', ¡hacéselo saber a su diosa creadora ',
-        React.createElement('span',{style:{color:'var(--pink)',fontWeight:800,fontSize:16,background:'rgba(244,114,182,0.12)',padding:'1px 8px',borderRadius:8}},'Malenit'),'!'
-      ),
-      React.createElement('div',{style:{marginTop:10,fontSize:13,color:'var(--text3)',fontStyle:'italic'}},'ありがとう ございます！')
     )
   );
 }
 
-// ─── NAV ITEMS (sin gym ni stats) ─────────────────────────────────────────────
+// ─── NAV ITEMS (sin notificaciones separadas) ─────────────────────────────────
 const NAV_ITEMS = [
   {id:'dashboard',  label:'Panel',      icon:'home'},
   {id:'calendar',   label:'Calendario', icon:'calendar'},
@@ -2258,7 +1992,6 @@ const NAV_ITEMS = [
   {id:'habits',     label:'Hábitos',    icon:'heart'},
   {id:'focus',      label:'Enfoque',    icon:'focus'},
   {id:'notes',      label:'Notas',      icon:'note'},
-  {id:'notifications',label:'Notifs',  icon:'bell'},
   {id:'profile',    label:'Perfil',     icon:'user'},
 ];
 
@@ -2354,16 +2087,15 @@ function App() {
   );
 
   const PAGES={
-    dashboard:     React.createElement(Dashboard,         {state:data,setPage,user}),
-    calendar:      React.createElement(Calendar,          {state:data,setState:setData,showToast}),
-    faculty:       React.createElement(Faculty,           {state:data,setState:setData,showToast}),
-    activities:    React.createElement(Activities,        {state:data,setState:setData,showToast}),
-    tasks:         React.createElement(Tasks,             {state:data,setState:setData,showToast}),
-    habits:        React.createElement(Habits,            {state:data,setState:setData,showToast}),
-    focus:         React.createElement(Focus,             {state:data,setState:setData,showToast}),
-    notes:         React.createElement(Notes,             {state:data,setState:setData,showToast}),
-    notifications: React.createElement(NotificationsPanel,{state:data,showToast}),
-    profile:       React.createElement(Profile,           {user,onLogout:handleLogout,state:data,showToast}),
+    dashboard:  React.createElement(Dashboard,  {state:data,setPage,user}),
+    calendar:   React.createElement(Calendar,   {state:data,setState:setData,showToast}),
+    faculty:    React.createElement(Faculty,    {state:data,setState:setData,showToast}),
+    activities: React.createElement(Activities, {state:data,setState:setData,showToast}),
+    tasks:      React.createElement(Tasks,      {state:data,setState:setData,showToast}),
+    habits:     React.createElement(Habits,     {state:data,setState:setData,showToast}),
+    focus:      React.createElement(Focus,      {state:data,setState:setData,showToast}),
+    notes:      React.createElement(Notes,      {state:data,setState:setData,showToast}),
+    profile:    React.createElement(Profile,    {user,onLogout:handleLogout,state:data,setState:setData,showToast}),
   };
 
   return React.createElement(React.Fragment,null,
