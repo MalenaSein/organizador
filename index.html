@@ -272,6 +272,78 @@ const BLANK = () => ({
   theme:'dark', subjects:[], activities:[], tasks:[], habits:[], events:[], notes:[]
 });
 
+// ─── FERIADOS NACIONALES ARGENTINA ───────────────────────────────────────────
+// Feriados fijos (MM-DD) y móviles (año completo YYYY-MM-DD para 2024-2027)
+const FERIADOS_FIJOS = [
+  '01-01', // Año Nuevo
+  '03-24', // Día de la Memoria
+  '04-02', // Día del Veterano
+  '05-01', // Día del Trabajador
+  '05-25', // Revolución de Mayo
+  '06-20', // Paso a la Inmortalidad del Gral. Belgrano
+  '07-09', // Día de la Independencia
+  '10-12', // Día del Respeto a la Diversidad Cultural
+  '11-20', // Día de la Soberanía Nacional
+  '12-08', // Inmaculada Concepción
+  '12-25', // Navidad
+];
+// Feriados móviles (Semana Santa y otros) para 2024-2027
+const FERIADOS_MOVILES = new Set([
+  // 2024
+  '2024-02-12','2024-02-13', // Carnaval
+  '2024-03-28','2024-03-29', // Semana Santa
+  '2024-08-17', // Gral. San Martín (3er lunes de agosto)
+  '2024-10-14', // Día del Respeto (lunes)
+  '2024-11-18', // Soberanía (4to lunes)
+  // 2025
+  '2025-03-03','2025-03-04', // Carnaval
+  '2025-04-17','2025-04-18', // Semana Santa
+  '2025-08-18', // San Martín
+  '2025-10-12', // Diversidad Cultural
+  '2025-11-24', // Soberanía
+  // 2026
+  '2026-02-16','2026-02-17', // Carnaval
+  '2026-04-02','2026-04-03', // Semana Santa
+  '2026-08-17', // San Martín
+  '2026-10-12', // Diversidad Cultural
+  '2026-11-23', // Soberanía
+  // 2027
+  '2027-02-08','2027-02-09', // Carnaval
+  '2027-03-25','2027-03-26', // Semana Santa
+  '2027-08-16', // San Martín
+  '2027-10-11', // Diversidad Cultural
+  '2027-11-22', // Soberanía
+]);
+
+function isArgentineHoliday(dateStr) {
+  if(FERIADOS_MOVILES.has(dateStr)) return true;
+  const mmdd = dateStr.slice(5); // "MM-DD"
+  return FERIADOS_FIJOS.includes(mmdd);
+}
+
+function getHolidayName(dateStr) {
+  if(FERIADOS_MOVILES.has(dateStr)) {
+    const mmdd = dateStr.slice(5);
+    const m = parseInt(dateStr.slice(5,7));
+    const d = parseInt(dateStr.slice(8,10));
+    if(m===2||m===3&&d<10) return 'Carnaval';
+    if(m===3||m===4) return 'Semana Santa';
+    if(m===8) return 'Día de San Martín';
+    if(m===10) return 'Diversidad Cultural';
+    if(m===11) return 'Soberanía Nacional';
+    return 'Feriado';
+  }
+  const mmdd = dateStr.slice(5);
+  const names = {
+    '01-01':'Año Nuevo','03-24':'Día de la Memoria','04-02':'Día del Veterano',
+    '05-01':'Día del Trabajador','05-25':'Revolución de Mayo',
+    '06-20':'Paso a la Inmortalidad — Belgrano','07-09':'Día de la Independencia',
+    '10-12':'Diversidad Cultural','11-20':'Soberanía Nacional',
+    '12-08':'Inmaculada Concepción','12-25':'Navidad',
+  };
+  return names[mmdd]||'Feriado';
+}
+
 const firebaseError = (code) => {
   const map = {
     'auth/email-already-in-use':'Ese email ya tiene una cuenta registrada.',
@@ -539,6 +611,31 @@ function getSubjectSchedulesForDay(subject, dayIdx) {
   return [];
 }
 
+// Expande eventos recurrentes: dado un array de eventos base,
+// devuelve también las ocurrencias generadas según su recurrence.
+function expandRecurringEvents(events, fromDate, toDate) {
+  const result = [];
+  (events||[]).forEach(ev => {
+    result.push(ev); // siempre incluir el original
+    if(!ev.recurrence || ev.recurrence==='none' || !ev.recurrenceEnd) return;
+    const endLimit = ev.recurrenceEnd < toDate ? ev.recurrenceEnd : toDate;
+    let cur = new Date(ev.date+'T12:00:00');
+    let safetyCount = 0;
+    while(safetyCount++ < 500) {
+      // avanzar al próximo
+      if(ev.recurrence==='weekly') cur.setDate(cur.getDate()+7);
+      else if(ev.recurrence==='biweekly') cur.setDate(cur.getDate()+14);
+      else if(ev.recurrence==='monthly') cur.setMonth(cur.getMonth()+1);
+      const ds = fmtDate(cur);
+      if(ds > endLimit) break;
+      if(ds >= fromDate) {
+        result.push({...ev, date:ds, id:ev.id+'_r_'+ds, _isRecurrence:true, _originalId:ev.id});
+      }
+    }
+  });
+  return result;
+}
+
 function assignOverlapColumns(blocks) {
   if(!blocks.length) return blocks;
   const sorted = [...blocks].sort((a,b) => a.top - b.top);
@@ -571,6 +668,7 @@ function buildWeekDayBlocks(subjects, activities, events, tasks, dayI, dateStr) 
 
   subjects.forEach(sub => {
     if(!isSubjectActiveOnDate(sub, dateStr)) return;
+    if(isArgentineHoliday(dateStr)) return; // feriado: sin clases
     getSubjectSchedulesForDay(sub, dayI).forEach(sch => {
       const t = parseSubjectTime(sch.time);
       if(!t) return;
@@ -770,7 +868,8 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
           const evs=events.filter(e=>e.date===c.date);
           const cellDate=new Date(c.date+'T12:00:00');
           const dayOfWeek=cellDate.getDay();
-          const subs=subjects.filter(s=>{
+          const isHoliday = isArgentineHoliday(c.date);
+          const subs=isHoliday?[]:subjects.filter(s=>{
             if(!isSubjectActiveOnDate(s,c.date)) return false;
             return getSubjectSchedulesForDay(s,dayOfWeek).length>0;
           });
@@ -782,6 +881,7 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
           });
           const tasksDue=(tasks||[]).filter(t=>t.dueDate===c.date&&t.status!=='completada');
           const allItems = [
+            ...(isHoliday?[{label:'🇦🇷 '+getHolidayName(c.date),color:'#f472b688',isHoliday:true}]:[]),
             ...subs.map(s=>({label:'📚 '+s.name,color:s.color+'cc'})),
             ...acts.map(a=>({label:(a.icon||'🏃')+' '+a.name,color:a.color+'cc'})),
             ...tasksDue.map(t=>({label:'✅ '+t.title,color:'#f8717199'})),
@@ -812,7 +912,9 @@ function MonthView({curr,events,subjects,activities,tasks,onDay,onEvent}) {
 function DayDetailPopup({dateStr, events, subjects, activities, tasks, onClose, onNewEvent, onEditEvent}) {
   const d = new Date(dateStr+'T12:00:00');
   const dayOfWeek = d.getDay();
-  const subs = subjects.filter(s => {
+  const isHoliday = isArgentineHoliday(dateStr);
+  const holidayName = isHoliday ? getHolidayName(dateStr) : '';
+  const subs = isHoliday ? [] : subjects.filter(s => {
     if(!isSubjectActiveOnDate(s, dateStr)) return false;
     return getSubjectSchedulesForDay(s, dayOfWeek).length > 0;
   });
@@ -838,7 +940,14 @@ function DayDetailPopup({dateStr, events, subjects, activities, tasks, onClose, 
           React.createElement('button',{className:'btn btn-ghost btn-icon',style:{width:32,height:32},onClick:onClose},React.createElement(Icon,{name:'x',size:14}))
         )
       ),
-      total===0&&React.createElement('div',{style:{textAlign:'center',padding:'32px 0',color:'var(--text3)',fontSize:13}},'🌙 Sin nada agendado para este día'),
+      total===0&&!isHoliday&&React.createElement('div',{style:{textAlign:'center',padding:'32px 0',color:'var(--text3)',fontSize:13}},'🌙 Sin nada agendado para este día'),
+      isHoliday&&React.createElement('div',{style:{background:'rgba(244,114,182,0.1)',border:'1px solid rgba(244,114,182,0.3)',borderRadius:10,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:10}},
+        React.createElement('span',{style:{fontSize:20}},'🇦🇷'),
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontWeight:700,fontSize:14,color:'var(--pink)'}},holidayName),
+          React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'Feriado nacional — clases canceladas')
+        )
+      ),
       subs.length>0&&React.createElement('div',{style:{marginBottom:16}},
         React.createElement('div',{style:{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'var(--text3)',marginBottom:8}},'📚 Materias'),
         subs.map(s=>getSubjectSchedulesForDay(s,dayOfWeek).map((sch,si)=>React.createElement('div',{
@@ -943,25 +1052,53 @@ function Calendar({state,setState,showToast}) {
   const [curr,setCurr]=useState(new Date());
   const [modal,setModal]=useState(false);
   const [editEv,setEditEv]=useState(null);
-  const blank={title:'',category:'facultad',subject:'',activity:'',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr(),links:[]};
+  const blank={title:'',category:'facultad',subject:'',activity:'',start:'09:00',end:'10:00',color:'#7c6af7',date:todayStr(),links:[],recurrence:'none',recurrenceEnd:''};
   const [form,setForm]=useState(blank);
 
   const nav=dir=>{const d=new Date(curr);if(view==='month')d.setMonth(d.getMonth()+dir);else if(view==='week')d.setDate(d.getDate()+dir*7);else d.setDate(d.getDate()+dir);setCurr(d);};
   const lbl=()=>{if(view==='month')return`${MONTHS[curr.getMonth()]} ${curr.getFullYear()}`;if(view==='week'){const s=new Date(curr);s.setDate(s.getDate()-s.getDay());const e=new Date(s);e.setDate(e.getDate()+6);return`${s.getDate()} - ${e.getDate()} ${MONTHS[s.getMonth()]}`;}return`${curr.getDate()} de ${MONTHS[curr.getMonth()]}`;};
   const openNew=(date,start)=>{setEditEv(null);setForm({...blank,date:date||todayStr(),start:start||'09:00',links:[]});setModal(true);};
-  const openEdit=ev=>{setEditEv(ev);setForm({...blank,...ev,links:ev.links||[],activity:ev.activity||''});setModal(true);};
+  const openEdit=ev=>{setEditEv(ev);setForm({...blank,...ev,links:ev.links||[],activity:ev.activity||'',recurrence:ev.recurrence||'none',recurrenceEnd:ev.recurrenceEnd||''});setModal(true);};
   const save=()=>{
     if(!form.title.trim()) return;
     const sub=state.subjects.find(s=>s.name===form.subject);
     const color=sub?sub.color:form.color;
     const ev={...form,color,id:editEv?editEv.id:Date.now()};
-    setState(s=>({...s,events:editEv?s.events.map(e=>e.id===editEv.id?ev:e):[...s.events,ev]}));
+    // Si es edición de una ocurrencia generada, editar el evento original
+    const targetId = ev._originalId || ev.id;
+    const cleanEv = {...ev, _isRecurrence:undefined, _originalId:undefined};
+    setState(s=>({...s,events:editEv?s.events.map(e=>e.id===targetId?cleanEv:e):[...s.events,cleanEv]}));
     if(NotifManager.permission==='granted') NotifManager.schedule(`📅 ${ev.title}`,`En 15 minutos — ${ev.start}`,new Date(`${ev.date}T${ev.start}:00`).getTime()-15*60*1000,'ev_'+ev.id);
     setModal(false);showToast(editEv?'Evento actualizado':'Evento creado');
   };
-  const del=id=>{setState(s=>({...s,events:s.events.filter(e=>e.id!==id)}));NotifManager.cancel('ev_'+id);setModal(false);showToast('Evento eliminado');};
+  const del=id=>{
+    // Si es recurrencia, borrar el evento original
+    const realId=String(id).split('_r_')[0];
+    setState(s=>({...s,events:s.events.filter(e=>String(e.id)!==String(realId))}));
+    NotifManager.cancel('ev_'+realId);setModal(false);showToast('Evento eliminado');
+  };
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const selectedSub=state.subjects.find(s=>s.name===form.subject);
+
+  // Calcular rango visible para expandir recurrencias
+  const visStart = useMemo(()=>{
+    const d=new Date(curr);
+    if(view==='month'){d.setDate(1);d.setDate(d.getDate()-d.getDay());}
+    else if(view==='week') d.setDate(d.getDate()-d.getDay());
+    return fmtDate(d);
+  },[curr,view]);
+  const visEnd = useMemo(()=>{
+    const d=new Date(curr);
+    if(view==='month'){d.setMonth(d.getMonth()+1);d.setDate(d.getDate()+14);}
+    else if(view==='week') d.setDate(d.getDate()-d.getDay()+13);
+    else d.setDate(d.getDate()+1);
+    return fmtDate(d);
+  },[curr,view]);
+  const expandedEvents = useMemo(()=>expandRecurringEvents(state.events, visStart, visEnd),[state.events,visStart,visEnd]);
+  // Para el horario fijo semanal (esta semana)
+  const thisWeekStart = fmtDate(new Date(new Date().setDate(new Date().getDate()-new Date().getDay())));
+  const thisWeekEnd = fmtDate(new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+6)));
+  const expandedEventsThisWeek = useMemo(()=>expandRecurringEvents(state.events, thisWeekStart, thisWeekEnd),[state.events]);
 
   return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:24}},
     React.createElement('div',{className:'page-header'},
@@ -973,7 +1110,7 @@ function Calendar({state,setState,showToast}) {
         React.createElement('div',{className:'card-title',style:{marginBottom:2}},'📚 Horario Semanal — Esta Semana'),
         React.createElement('div',{style:{fontSize:11,color:'var(--text3)'}},'Clic en cualquier celda para agregar un evento')
       ),
-      React.createElement(FixedWeekCalendar,{subjects:state.subjects,events:state.events,activities:state.activities||[],tasks:state.tasks||[],onSlotClick:(date,start)=>openNew(date,start)})
+      React.createElement(FixedWeekCalendar,{subjects:state.subjects,events:expandedEventsThisWeek,activities:state.activities||[],tasks:state.tasks||[],onSlotClick:(date,start)=>openNew(date,start)})
     ),
     React.createElement('div',{className:'card'},
       React.createElement('div',{style:{display:'flex',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:12}},
@@ -988,11 +1125,11 @@ function Calendar({state,setState,showToast}) {
           React.createElement('button',{className:'btn btn-ghost btn-sm',onClick:()=>setCurr(new Date())},'Hoy')
         )
       ),
-      view==='month'&&React.createElement(MonthView,{curr,events:state.events,subjects:state.subjects,activities:state.activities||[],tasks:state.tasks||[],onDay:openNew,onEvent:openEdit}),
-      view==='week'&&React.createElement(WeekView,{curr,events:state.events,subjects:state.subjects,activities:state.activities||[],tasks:state.tasks||[],onEvent:openEdit,onSlot:openNew}),
-      view==='day'&&React.createElement(DayView,{curr,events:state.events,subjects:state.subjects,activities:state.activities||[],tasks:state.tasks||[],onEvent:openEdit,onSlot:openNew}),
+      view==='month'&&React.createElement(MonthView,{curr,events:expandedEvents,subjects:state.subjects,activities:state.activities||[],tasks:state.tasks||[],onDay:openNew,onEvent:openEdit}),
+      view==='week'&&React.createElement(WeekView,{curr,events:expandedEvents,subjects:state.subjects,activities:state.activities||[],tasks:state.tasks||[],onEvent:openEdit,onSlot:openNew}),
+      view==='day'&&React.createElement(DayView,{curr,events:expandedEvents,subjects:state.subjects,activities:state.activities||[],tasks:state.tasks||[],onEvent:openEdit,onSlot:openNew}),
     ),
-    modal&&React.createElement(Modal,{title:editEv?'Editar Evento':'Nuevo Evento',onClose:()=>setModal(false)},
+    modal&&React.createElement(Modal,{title:editEv?`Editar Evento${editEv._isRecurrence?' (repetición)':''}`:'Nuevo Evento',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Título'),React.createElement('input',{className:'input',value:form.title,placeholder:'Ej: Parcial de Cálculo',onChange:F('title'),autoFocus:true})),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Categoría'),
@@ -1019,6 +1156,19 @@ function Calendar({state,setState,showToast}) {
           React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Fin'),React.createElement('input',{className:'input',type:'time',value:form.end,onChange:F('end')}))
         ),
         React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Fecha'),React.createElement('input',{className:'input',type:'date',value:form.date,onChange:F('date')})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Repetición'),
+          React.createElement('select',{className:'input select',value:form.recurrence||'none',onChange:F('recurrence')},
+            React.createElement('option',{value:'none'},'Sin repetición'),
+            React.createElement('option',{value:'weekly'},'Cada semana'),
+            React.createElement('option',{value:'biweekly'},'Cada dos semanas'),
+            React.createElement('option',{value:'monthly'},'Cada mes'),
+          )
+        ),
+        form.recurrence&&form.recurrence!=='none'&&React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Repetir hasta'),
+          React.createElement('input',{className:'input',type:'date',value:form.recurrenceEnd||'',onChange:F('recurrenceEnd'),min:form.date})
+        ),
         !selectedSub&&React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Color'),React.createElement(ColorPicker,{value:form.color,onChange:c=>setForm(f=>({...f,color:c}))})),
         React.createElement(LinksEditor,{links:form.links||[],onChange:v=>setForm(f=>({...f,links:v}))}),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:8}},
@@ -1214,7 +1364,6 @@ function Activities({state,setState,showToast}) {
 
 // ─── TASKS (KANBAN) ───────────────────────────────────────────────────────────
 function Tasks({state,setState,showToast}) {
-  const [filter,setFilter]=useState('all');
   const [modal,setModal]=useState(false);
   const [editingTask,setEditingTask]=useState(null);
   const [dragId,setDragId]=useState(null);
@@ -1225,21 +1374,25 @@ function Tasks({state,setState,showToast}) {
   const dragRef=useRef({id:null,ghost:null,colEls:{}});
 
   const activityNames=(state.activities||[]).map(a=>a.name);
-  const filterBtns=[
-    ['all','Todas'],['facultad','Facultad'],['hogar','Hogar'],['personal','Personal'],['trabajo','Trabajo'],
-    ...(activityNames.length>0?activityNames.map(n=>[n,n]):[]),
-  ];
-
   const sortedTasks=(tasks)=>[...tasks].sort((a,b)=>{
     const da=a.dueDate||'9999-99-99', db=b.dueDate||'9999-99-99';
     if(da!==db) return da<db?-1:1;
     return ({alta:0,media:1,baja:2}[a.priority]||1)-({alta:0,media:1,baja:2}[b.priority]||1);
   });
 
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const subjectNames = (state.subjects||[]).map(s=>s.name);
+
   const filterFn=(t)=>{
-    if(filter==='all') return true;
-    if(activityNames.includes(filter)) return t.activity===filter;
-    return t.type===filter;
+    if(filterType!=='all'){
+      if(activityNames.includes(filterType)){if(t.activity!==filterType)return false;}
+      else if(t.type!==filterType)return false;
+    }
+    if(filterSubject&&t.subject!==filterSubject) return false;
+    if(filterPriority!=='all'&&t.priority!==filterPriority) return false;
+    return true;
   };
   const getCol=(status)=>sortedTasks(state.tasks.filter(t=>t.status===status&&filterFn(t)));
 
@@ -1347,8 +1500,48 @@ function Tasks({state,setState,showToast}) {
       React.createElement('h1',{className:'page-title'},'✅ ',React.createElement('span',null,'Tareas')),
       React.createElement('button',{className:'btn btn-primary',onClick:openNew},React.createElement(Icon,{name:'plus',size:16}),'Nueva')
     ),
-    React.createElement('div',{className:'flex gap-2',style:{marginBottom:16,flexWrap:'wrap'}},
-      filterBtns.map(([v,l])=>React.createElement('button',{key:v,className:`btn btn-sm ${filter===v?'btn-primary':'btn-ghost'}`,onClick:()=>setFilter(v)},l))
+    React.createElement('div',{style:{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,padding:'10px 14px'}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}},
+        React.createElement('span',{style:{fontSize:12,fontWeight:600,color:'var(--text3)'}},'🔍 Filtrar:')
+      ),
+      React.createElement('select',{
+        className:'input select',
+        style:{width:'auto',minWidth:110,padding:'6px 10px',fontSize:13},
+        value:filterType,
+        onChange:e=>{setFilterType(e.target.value);setFilterSubject('');}
+      },
+        React.createElement('option',{value:'all'},'Todos los tipos'),
+        React.createElement('option',{value:'facultad'},'📚 Facultad'),
+        React.createElement('option',{value:'hogar'},'🏠 Hogar'),
+        React.createElement('option',{value:'personal'},'🙋 Personal'),
+        React.createElement('option',{value:'trabajo'},'💼 Trabajo'),
+        ...(activityNames.map(n=>React.createElement('option',{key:n,value:n},'🏃 '+n)))
+      ),
+      (filterType==='facultad'||filterType==='all')&&(state.subjects||[]).length>0&&React.createElement('select',{
+        className:'input select',
+        style:{width:'auto',minWidth:130,padding:'6px 10px',fontSize:13},
+        value:filterSubject,
+        onChange:e=>setFilterSubject(e.target.value)
+      },
+        React.createElement('option',{value:''},'Todas las materias'),
+        (state.subjects||[]).map(s=>React.createElement('option',{key:s.id,value:s.name},s.name))
+      ),
+      React.createElement('select',{
+        className:'input select',
+        style:{width:'auto',minWidth:120,padding:'6px 10px',fontSize:13},
+        value:filterPriority,
+        onChange:e=>setFilterPriority(e.target.value)
+      },
+        React.createElement('option',{value:'all'},'Todas las prioridades'),
+        React.createElement('option',{value:'alta'},'🔴 Alta'),
+        React.createElement('option',{value:'media'},'🟡 Media'),
+        React.createElement('option',{value:'baja'},'🟢 Baja')
+      ),
+      (filterType!=='all'||filterSubject||filterPriority!=='all')&&React.createElement('button',{
+        className:'btn btn-ghost btn-sm',
+        onClick:()=>{setFilterType('all');setFilterSubject('');setFilterPriority('all');},
+        style:{fontSize:12,color:'var(--text3)',flexShrink:0}
+      },'✕ Limpiar')
     ),
     !isMob&&React.createElement('div',{style:{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}},
       COLS.map(col=>{const count=getCol(col.status).length;return React.createElement('div',{key:col.status,style:{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:20,fontSize:12,fontWeight:600}},React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:col.color}}),col.label.replace(/^[^\s]+ /,''),React.createElement('span',{style:{color:col.color,marginLeft:4}},count));})
@@ -1738,18 +1931,21 @@ function Notes({state,setState,showToast}) {
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({state,setPage,user}) {
   const now = new Date();
-  const todayEvs = state.events.filter(e=>e.date===todayStr());
   const today = todayStr();
   const in30 = fmtDate(new Date(Date.now()+30*24*60*60*1000));
 
+  const allExpanded = expandRecurringEvents(state.events, today, in30);
+
+  const todayEvs = allExpanded.filter(e=>e.date===today);
+
   // Eventos de facultad próximos (30 días)
-  const facultyEvents = state.events
+  const facultyEvents = allExpanded
     .filter(e=>e.category==='facultad' && e.date>=today && e.date<=in30)
     .sort((a,b)=>a.date.localeCompare(b.date))
     .slice(0,6);
 
   // Eventos extracurriculares próximos (30 días)
-  const extraEvents = state.events
+  const extraEvents = allExpanded
     .filter(e=>e.category==='extracurricular' && e.date>=today && e.date<=in30)
     .sort((a,b)=>a.date.localeCompare(b.date))
     .slice(0,6);
@@ -1768,7 +1964,9 @@ function Dashboard({state,setPage,user}) {
   );
 
   const getDaysUntil=(dateStr)=>{
-    const diff=Math.ceil((new Date(dateStr+'T12:00:00')-now)/(1000*60*60*24));
+    const todayDate=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const evDate=new Date(dateStr+'T00:00:00');
+    const diff=Math.round((evDate-todayDate)/(1000*60*60*24));
     if(diff===0)return'Hoy';if(diff===1)return'Mañana';return`En ${diff} días`;
   };
 
