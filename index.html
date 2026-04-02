@@ -209,6 +209,7 @@
   .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
   hr.divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
 </style>
+
 </head>
 <body>
 <div id="root"></div>
@@ -218,7 +219,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyB3ghd87bGn-Ovl4dTTqod4C3OK4PIc0fs",
@@ -445,73 +446,82 @@ function IconPicker({value, onChange, icons, label='Ícono'}) {
 }
 
 // ─── NOTIF MANAGER CON FCM ────────────────────────────────────────────────────
-const VAPID_KEY = 'BANAZ9KM1TP22IPTDM6fdv9_KhoaFwbLsQIFnhtEc2kJ91Wz6FIGGfnXxImbkj3C10yCw_E8kxPuOAktCsOW358'; 
-
+const VAPID_KEY = 'BANAZ9KM1TP22IPTDM6fdv9_KhoaFwbLsQIFnhtEc2kJ91Wz6FIGGfnXxImbkj3C10yCw_E8kxPuOAktCsOW358';
+ 
 const NotifManager = {
   _token: null,
-
+  _messaging: null,
+ 
   async request() {
     if (!('Notification' in window)) return 'unsupported';
     if (Notification.permission === 'denied') return 'denied';
-
-    // 1. Pedir permiso del browser
+ 
+    // 1. Pedir permiso
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return perm;
-
+ 
     try {
       // 2. Registrar Service Worker
       const reg = await navigator.serviceWorker.register('/organizador/service-worker.js');
-
-      // 3. Obtener token FCM
-      const { getMessaging, getToken, onMessage } = await import(
-        'https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js'
-      );
-      const msgApp = firebase.app(); // reusar la app ya inicializada
-      const messaging = getMessaging(msgApp);
-
-      const token = await getToken(messaging, {
+      await navigator.serviceWorker.ready;
+ 
+      // 3. Inicializar messaging COMPAT (no import dinámico)
+      this._messaging = firebase.messaging();
+ 
+      // 4. Obtener token FCM
+      const token = await this._messaging.getToken({
         vapidKey: VAPID_KEY,
         serviceWorkerRegistration: reg,
       });
-
+ 
+      if (!token) {
+        console.warn('No se obtuvo token FCM');
+        return 'error';
+      }
+ 
       this._token = token;
-      console.log('FCM token:', token); // guardar este token para el paso 3
-
-      // 4. Notificaciones con app ABIERTA (foreground)
-      onMessage(messaging, payload => {
+      console.log('✅ FCM token:', token);
+ 
+      // 5. Notificaciones con app ABIERTA (foreground)
+      this._messaging.onMessage(payload => {
         const { title, body } = payload.notification || {};
         if (title) {
           reg.showNotification(title, {
             body: body || '',
             icon: '/organizador/icons/icon-192.png',
+            badge: '/organizador/icons/icon-192.png',
           });
         }
       });
-
+ 
       return 'granted';
     } catch (err) {
       console.error('FCM error:', err);
       return 'error';
     }
   },
-
+ 
   get permission() {
     if (!('Notification' in window)) return 'unsupported';
     return Notification.permission;
   },
-
-  // Guardar token en Firestore para que la Cloud Function lo use
+ 
   async saveTokenToFirestore(uid) {
     if (!this._token || !uid) return;
-    await db.collection('fcm_tokens').doc(uid).set({
-      token: this._token,
-      updatedAt: new Date().toISOString(),
-    });
+    try {
+      await db.collection('fcm_tokens').doc(uid).set({
+        token: this._token,
+        updatedAt: new Date().toISOString(),
+      });
+      console.log('✅ Token guardado en Firestore');
+    } catch (e) {
+      console.error('Error guardando token:', e);
+    }
   },
-
-  // Estas funciones se mantienen para compatibilidad (funcionan con app abierta)
-  schedule(title, body, datetime, id) {
-    const delay = new Date(datetime).getTime() - Date.now();
+ 
+  // Notificaciones con app abierta (fallback local)
+  schedule(title, body, datetimeMs, id) {
+    const delay = datetimeMs - Date.now();
     if (delay < 0) return;
     const key = 'notif_' + id;
     window._notifTimers = window._notifTimers || {};
@@ -522,7 +532,7 @@ const NotifManager = {
       }
     }, Math.min(delay, 2147483647));
   },
-
+ 
   cancel(id) {
     const key = 'notif_' + id;
     if (window._notifTimers?.[key]) {
@@ -530,13 +540,13 @@ const NotifManager = {
       delete window._notifTimers[key];
     }
   },
-
+ 
   scheduleAll(state) {
     if (this.permission !== 'granted') return;
     (state.events || []).forEach(ev => {
       if (!ev.date || !ev.start) return;
-      const target = new Date(`${ev.date}T${ev.start}:00`).getTime() - 15 * 60 * 1000;
-      this.schedule(`📅 ${ev.title}`, `En 15 minutos — ${ev.start}`, new Date(target), 'ev_' + ev.id);
+      const targetMs = new Date(`${ev.date}T${ev.start}:00`).getTime() - 15 * 60 * 1000;
+      this.schedule(`📅 ${ev.title}`, `En 15 minutos — ${ev.start}`, targetMs, 'ev_' + ev.id);
     });
   },
 };
@@ -1119,7 +1129,10 @@ function Calendar({state,setState,showToast}) {
     const targetId = ev._originalId || ev.id;
     const cleanEv = {...ev, _isRecurrence:undefined, _originalId:undefined};
     setState(s=>({...s,events:editEv?s.events.map(e=>e.id===targetId?cleanEv:e):[...s.events,cleanEv]}));
-    if(NotifManager.permission==='granted') NotifManager.schedule(`📅 ${ev.title}`,`En 15 minutos — ${ev.start}`,new Date(`${ev.date}T${ev.start}:00`).getTime()-15*60*1000,'ev_'+ev.id);
+    if(NotifManager.permission==='granted'){
+       const targetMs = new Date(`${ev.date}T${ev.start}:00`).getTime() - 15*60*1000;
+       NotifManager.schedule(`📅 ${ev.title}`, `En 15 minutos — ${ev.start}`, targetMs, 'ev_'+ev.id);
+     }
     setModal(false);showToast(editEv?'Evento actualizado':'Evento creado');
   };
   const del=id=>{
