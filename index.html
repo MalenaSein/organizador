@@ -233,7 +233,8 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();
-const saveData = (uid, data) => db.collection('users').doc(uid).set(data);
+const cleanForFirestore = (obj) => JSON.parse(JSON.stringify(obj, (key, val) => val === undefined ? null : val));
+const saveData = (uid, data) => db.collection('users').doc(uid).set(cleanForFirestore(data));
 const loadData = async (uid) => { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? snap.data() : null; };
 
 const { useState, useEffect, useCallback, useRef, useMemo } = React;
