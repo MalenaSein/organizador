@@ -463,7 +463,7 @@ const NotifManager = {
  
     try {
       // 2. Registrar Service Worker
-      const reg = await navigator.serviceWorker.register('/organizador/service-worker.js');
+      const reg = await navigator.serviceWorker.register('/service-worker.js');
       await navigator.serviceWorker.ready;
  
       // 3. Inicializar messaging COMPAT (no import dinámico)
