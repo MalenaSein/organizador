@@ -1506,6 +1506,24 @@ function Tasks({state,setState,showToast}) {
 
   const KanbanCard=({task, compact=false})=>{
     const isDragging=dragId===task.id;
+    // Buscar el color real de la materia o actividad
+    const linkedSubject=(state.subjects||[]).find(s=>s.name===task.subject);
+    const linkedActivity=(state.activities||[]).find(a=>a.name===task.activity);
+    const subjectColor=linkedSubject?linkedSubject.color:'var(--accent)';
+    const subjectBg=linkedSubject?linkedSubject.color+'22':'var(--accent-glow)';
+    const activityColor=linkedActivity?linkedActivity.color:'var(--orange)';
+    const activityBg=linkedActivity?linkedActivity.color+'22':'rgba(251,146,60,0.15)';
+    // Calcular días restantes
+    const getDueDays=(dueDate)=>{
+      if(!dueDate) return null;
+      const today=new Date(); today.setHours(0,0,0,0);
+      const due=new Date(dueDate+'T00:00:00'); due.setHours(0,0,0,0);
+      const diff=Math.round((due-today)/(1000*60*60*24));
+      return diff;
+    };
+    const dueDays=getDueDays(task.dueDate);
+    const dueColor=dueDays===null?'var(--text3)':dueDays<0?'var(--red)':dueDays===0?'var(--red)':dueDays<=3?'var(--orange)':dueDays<=7?'var(--yellow)':'var(--text3)';
+    const dueLabel=dueDays===null?null:dueDays<0?`Vencida hace ${Math.abs(dueDays)}d`:dueDays===0?'Vence hoy':dueDays===1?'Vence mañana':`${dueDays}d restantes`;
     if(compact){
       const nextStatus={pendiente:'en-progreso','en-progreso':'completada',completada:'pendiente'};
       const nextLabel={pendiente:'▶','en-progreso':'✅',completada:'↩'};
@@ -1513,8 +1531,11 @@ function Tasks({state,setState,showToast}) {
         React.createElement('div',{style:{flex:1,minWidth:0}},
           React.createElement('div',{style:{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}},task.title),
           React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
-            (task.subject||task.activity)&&React.createElement('span',{style:{fontSize:10,fontWeight:700,color:task.subject?'var(--accent)':'var(--orange)',background:task.subject?'var(--accent-glow)':'rgba(251,146,60,0.15)',padding:'1px 7px',borderRadius:8,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block'}},task.subject||task.activity),
-            task.dueDate&&React.createElement('span',{style:{fontSize:10,color:'var(--text3)'}},'📅 '+task.dueDate)
+            task.subject&&React.createElement('span',{style:{fontSize:10,fontWeight:700,color:subjectColor,background:subjectBg,padding:'1px 7px',borderRadius:8,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block'}},task.subject),
+            task.activity&&!task.subject&&React.createElement('span',{style:{fontSize:10,fontWeight:700,color:activityColor,background:activityBg,padding:'1px 7px',borderRadius:8,maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block'}},task.activity),
+            task.dueDate&&React.createElement('span',{style:{fontSize:10,color:dueColor,fontWeight:dueDays!==null&&dueDays<=3?700:400}},
+              '📅 ',task.dueDate,' · ',dueLabel
+            )
           )
         ),
         React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
@@ -1531,9 +1552,12 @@ function Tasks({state,setState,showToast}) {
       React.createElement('div',{style:{width:'100%',height:3,borderRadius:4,background:PC[task.priority],marginBottom:10,opacity:0.8}}),
       React.createElement('div',{className:'kanban-card-title'},task.title),
       React.createElement('div',{className:'kanban-card-meta'},
-        task.subject&&React.createElement('div',{className:'badge',style:{background:'var(--accent-glow)',color:'var(--accent)',fontSize:10,maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}},task.subject),
-        task.activity&&React.createElement('div',{className:'badge',style:{background:'rgba(251,146,60,0.15)',color:'var(--orange)',fontSize:10,maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}},task.activity),
-        task.dueDate&&React.createElement('span',{style:{fontSize:10,color:'var(--text3)'}},React.createElement(Icon,{name:'calendar',size:10}),' ',task.dueDate)
+        task.subject&&React.createElement('div',{className:'badge',style:{background:subjectBg,color:subjectColor,fontSize:10,maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}},task.subject),
+        task.activity&&!task.subject&&React.createElement('div',{className:'badge',style:{background:activityBg,color:activityColor,fontSize:10,maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}},task.activity),
+        task.dueDate&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:2,marginTop:4,width:'100%'}},
+          React.createElement('span',{style:{fontSize:10,color:'var(--text3)'}},React.createElement(Icon,{name:'calendar',size:10}),' ',task.dueDate),
+          dueLabel&&React.createElement('span',{style:{fontSize:10,fontWeight:700,color:dueColor}},dueLabel)
+        )
       ),
       task.notes&&React.createElement('div',{style:{fontSize:11,color:'var(--text3)',marginTop:6,lineHeight:1.4,overflow:'hidden',textOverflow:'ellipsis',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}},task.notes),
       (task.links||[]).filter(l=>l.url).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginTop:6}},
@@ -2166,20 +2190,27 @@ function Dashboard({state,setPage,user}) {
 }
 
 // ─── PROFILE (con notificaciones integradas) ──────────────────────────────────
-function Profile({user,onLogout,state,setState,showToast}) {
+function Profile({user,onLogout,state,setState,showToast,canInstall,onInstall}) {
   const [notifPerm, setNotifPerm] = useState(NotifManager.permission);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   const requestPerm = async () => {
-  const res = await NotifManager.request();
-  setNotifPerm(res);
-  if (res === 'granted') {
-    NotifManager.scheduleAll(state);
-    await NotifManager.saveTokenToFirestore(user.uid); // ← agregar esta línea
-    showToast('Notificaciones activadas ✅');
-  } else if (res === 'denied') {
-    showToast('Permiso denegado.', 'error');
-  }
-};
+    setNotifLoading(true);
+    try {
+      const res = await NotifManager.request();
+      setNotifPerm(res);
+      if (res === 'granted') {
+        NotifManager.scheduleAll(state);
+        await NotifManager.saveTokenToFirestore(user.uid);
+        showToast('Notificaciones activadas ✅');
+      } else if (res === 'denied') {
+        showToast('Permiso denegado. Activalo desde la configuración del navegador.', 'error');
+      } else if (res === 'error') {
+        showToast('Error al activar. Probá recargar la página.', 'error');
+      }
+    } catch(e) { showToast('Error inesperado', 'error'); }
+    setNotifLoading(false);
+  };
 
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},React.createElement('h1',{className:'page-title'},'👤 ',React.createElement('span',null,'Mi Perfil'))),
@@ -2199,9 +2230,22 @@ function Profile({user,onLogout,state,setState,showToast}) {
           ),
           React.createElement('button',{className:'btn btn-danger',style:{width:'100%',justifyContent:'center'},onClick:onLogout},React.createElement(Icon,{name:'logout',size:16}),' Cerrar Sesión')
         ),
+        // Instalar app
+        canInstall&&React.createElement('div',{className:'card'},
+          React.createElement('div',{className:'card-title'},'📲 Instalar App'),
+          React.createElement('div',{className:'notif-banner'},
+            React.createElement('span',{style:{fontSize:20}},'📲'),
+            React.createElement('div',{style:{flex:1}},
+              React.createElement('div',{style:{fontWeight:700,fontSize:13}},'Instalá el Organizador'),
+              React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'Accedé desde tu pantalla de inicio, sin el navegador.')
+            ),
+            React.createElement('button',{className:'btn btn-primary btn-sm',onClick:onInstall},'Instalar')
+          )
+        ),
         // Notificaciones integradas
         React.createElement('div',{className:'card'},
           React.createElement('div',{className:'card-title'},'🔔 Notificaciones'),
+          notifPerm==='unsupported'&&React.createElement('div',{style:{fontSize:13,color:'var(--text3)',padding:'12px 0'}},'⚠️ Tu navegador no soporta notificaciones.'),
           notifPerm==='default'&&React.createElement('div',null,
             React.createElement('div',{className:'notif-banner'},
               React.createElement('span',{style:{fontSize:20}},'🔔'),
@@ -2209,17 +2253,22 @@ function Profile({user,onLogout,state,setState,showToast}) {
                 React.createElement('div',{style:{fontWeight:700,fontSize:13}},'Activá las notificaciones'),
                 React.createElement('div',{style:{fontSize:12,color:'var(--text3)',marginTop:2}},'Recibí recordatorios 15 min antes de eventos.')
               ),
-              React.createElement('button',{className:'btn btn-primary btn-sm',onClick:requestPerm},'Activar')
+              React.createElement('button',{className:'btn btn-primary btn-sm',onClick:requestPerm,disabled:notifLoading},notifLoading?'Activando...':'Activar')
             )
           ),
-          notifPerm==='granted'&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:10,fontSize:13}},
-            React.createElement('span',{style:{fontSize:18}},'✅'),
-            React.createElement('div',null,
-              React.createElement('div',{style:{fontWeight:700}},'Notificaciones activas'),
-              React.createElement('div',{style:{color:'var(--text3)',fontSize:12}},'Recibirás recordatorios 15 min antes de cada evento.')
+          notifPerm==='granted'&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:10,fontSize:13}},
+              React.createElement('span',{style:{fontSize:18}},'✅'),
+              React.createElement('div',null,
+                React.createElement('div',{style:{fontWeight:700}},'Notificaciones activas'),
+                React.createElement('div',{style:{color:'var(--text3)',fontSize:12}},'Recibirás recordatorios 15 min antes de cada evento.')
+              )
+            ),
+            React.createElement('button',{className:'btn btn-ghost btn-sm',style:{alignSelf:'flex-start'},onClick:async()=>{await NotifManager.saveTokenToFirestore(user.uid);showToast('Token actualizado ✅');}},
+              '🔄 Actualizar token FCM'
             )
           ),
-          notifPerm==='denied'&&React.createElement('div',{style:{color:'var(--red)',fontSize:13,padding:'12px 0'}},'🚫 Notificaciones bloqueadas. Activalas desde la configuración de tu navegador.')
+          notifPerm==='denied'&&React.createElement('div',{style:{color:'var(--red)',fontSize:13,padding:'12px 0'}},'🚫 Notificaciones bloqueadas. Activalas desde la configuración de tu navegador → permisos de ',window.location.hostname,'.')
         )
       ),
       // Columna derecha: resumen
@@ -2297,6 +2346,34 @@ function MobileNav({page,setPage,toggleTheme,theme}) {
 }
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
+// ─── PWA INSTALL MANAGER ─────────────────────────────────────────────────────
+const InstallManager = {
+  _deferredPrompt: null,
+  _listeners: [],
+  init() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this._deferredPrompt = e;
+      this._listeners.forEach(fn => fn(true));
+    });
+    window.addEventListener('appinstalled', () => {
+      this._deferredPrompt = null;
+      this._listeners.forEach(fn => fn(false));
+    });
+  },
+  canInstall() { return !!this._deferredPrompt; },
+  onCanInstallChange(fn) { this._listeners.push(fn); return ()=>{ this._listeners=this._listeners.filter(f=>f!==fn); }; },
+  async install() {
+    if(!this._deferredPrompt) return false;
+    this._deferredPrompt.prompt();
+    const { outcome } = await this._deferredPrompt.userChoice;
+    this._deferredPrompt = null;
+    this._listeners.forEach(fn => fn(false));
+    return outcome === 'accepted';
+  },
+};
+InstallManager.init();
+
 function App() {
   const [user,setUser]=useState(null);
   const [data,setDataRaw]=useState(null);
@@ -2305,9 +2382,11 @@ function App() {
   const [saving,setSaving]=useState(false);
   const [booting,setBooting]=useState(true);
   const [isMobile,setIsMobile]=useState(window.innerWidth<=768);
+  const [canInstall,setCanInstall]=useState(InstallManager.canInstall());
   const saveTimer=useRef(null);
 
   useEffect(()=>{const fn=()=>setIsMobile(window.innerWidth<=768);window.addEventListener('resize',fn);return()=>window.removeEventListener('resize',fn);},[]);
+  useEffect(()=>InstallManager.onCanInstallChange(setCanInstall),[]);
 
   useEffect(()=>{
     const unsub=auth.onAuthStateChanged(async fbUser=>{
@@ -2365,7 +2444,7 @@ function App() {
     habits:     React.createElement(Habits,     {state:data,setState:setData,showToast}),
     focus:      React.createElement(Focus,      {state:data,setState:setData,showToast}),
     notes:      React.createElement(Notes,      {state:data,setState:setData,showToast}),
-    profile:    React.createElement(Profile,    {user,onLogout:handleLogout,state:data,setState:setData,showToast}),
+    profile:    React.createElement(Profile,    {user,onLogout:handleLogout,state:data,setState:setData,showToast,canInstall,onInstall:async()=>{const ok=await InstallManager.install();if(ok)showToast('¡App instalada! 🎉');}}),
   };
 
   return React.createElement(React.Fragment,null,
