@@ -1,39 +1,90 @@
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 
 initializeApp();
 const db = getFirestore();
 
-exports.checkUpcomingEvents = onSchedule("every 5 minutes", async () => {
-  const pad = (n) => String(n).padStart(2, "0");
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const pad = (n) => String(n).padStart(2, "0");
 
-  // Hora actual en Argentina (UTC-3)
+// Convierte Date a fecha ARG como objeto {dateStr, timeStr}
+function argTime(date) {
+  const arg = new Date(date.getTime() - 3 * 60 * 60 * 1000); // UTC-3
+  return {
+    dateStr: `${arg.getUTCFullYear()}-${pad(arg.getUTCMonth()+1)}-${pad(arg.getUTCDate())}`,
+    timeStr: `${pad(arg.getUTCHours())}:${pad(arg.getUTCMinutes())}`,
+  };
+}
+
+// Normaliza "9:00" → "09:00"
+function normalizeTime(t) {
+  const parts = String(t || "").split(":");
+  if (parts.length < 2) return null;
+  return parts[0].padStart(2, "0") + ":" + parts[1].padStart(2, "0");
+}
+
+// Envía una notificación FCM y maneja token inválido
+async function sendNotif(token, uid, payload) {
+  try {
+    await getMessaging().send({
+      token,
+      notification: {title: payload.title, body: payload.body},
+      webpush: {
+        fcmOptions: {link: "https://malenasein.github.io/organizador/"},
+        notification: {
+          icon: "https://malenasein.github.io/organizador/icons/icon-192.png",
+          badge: "https://malenasein.github.io/organizador/icons/icon-192.png",
+        },
+      },
+      data: payload.data || {},
+    });
+    console.log(`✅ Enviada: "${payload.title}" → uid=${uid}`);
+    return true;
+  } catch (err) {
+    console.error(`❌ Error uid=${uid}: ${err.message}`);
+    if (err.code === "messaging/registration-token-not-registered") {
+      await db.collection("fcm_tokens").doc(uid).delete();
+      console.log(`🗑 Token eliminado uid=${uid}`);
+    }
+    return false;
+  }
+}
+
+// Deduplicación atómica con transacción: devuelve true si hay que enviar
+async function claimNotif(key) {
+  const ref = db.collection("notif_sent").doc(key);
+  try {
+    const sent = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists) return false; // ya enviado
+      tx.set(ref, {sentAt: new Date().toISOString()});
+      return true;
+    });
+    return sent;
+  } catch (e) {
+    console.error("Error en transacción dedup:", e.message);
+    return false; // ante la duda, no enviar
+  }
+}
+
+// ─── FUNCIÓN PRINCIPAL ────────────────────────────────────────────────────────
+exports.checkUpcoming = onSchedule("every 5 minutes", async () => {
   const now = new Date();
-  const argNow = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-  const fmtDate = (d) =>
-    `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-  const fmtTime = (d) =>
-    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  // Ventana exacta: eventos que empiecen entre 13 y 18 minutos desde ahora
+  // Corriendo cada 5 min con ventana de 5 min → sin huecos, sin solapamiento
+  const winStart = new Date(now.getTime() + 13 * 60 * 1000);
+  const winEnd   = new Date(now.getTime() + 18 * 60 * 1000);
 
-  const todayStr = fmtDate(argNow);
-  const nowTimeStr = fmtTime(argNow); // hora actual ARG en HH:MM
+  const {dateStr: dateStart, timeStr: timeStart} = argTime(winStart);
+  const {dateStr: dateEnd,   timeStr: timeEnd}   = argTime(winEnd);
 
-  // Ventana: eventos que empiecen entre ahora y ahora+17min
-  // Al correr cada 5 min con ventana de 17 min, siempre hay superposición:
-  // garantiza que ningún evento se pierda, y el deduplicado evita dobles envíos.
-  const cutoffMs = argNow.getTime() + 17 * 60 * 1000;
-  const cutoffArgDate = new Date(cutoffMs);
-  const cutoffTimeStr = fmtTime(cutoffArgDate);
-  // Si la ventana cruza medianoche, el cutoff puede ser del día siguiente
-  const cutoffDateStr = fmtDate(cutoffArgDate);
-
-  console.log(`[ARG] Ahora: ${todayStr} ${nowTimeStr} | Ventana hasta: ${cutoffDateStr} ${cutoffTimeStr}`);
+  console.log(`Ventana ARG: ${dateStart} ${timeStart} → ${dateEnd} ${timeEnd}`);
 
   const tokensSnap = await db.collection("fcm_tokens").get();
-  console.log(`Tokens registrados: ${tokensSnap.size}`);
+  if (tokensSnap.empty) { console.log("Sin tokens"); return; }
 
   for (const tokenDoc of tokensSnap.docs) {
     const uid = tokenDoc.id;
@@ -42,103 +93,75 @@ exports.checkUpcomingEvents = onSchedule("every 5 minutes", async () => {
 
     const userSnap = await db.collection("users").doc(uid).get();
     if (!userSnap.exists) continue;
+    const {events = [], tasks = []} = userSnap.data();
 
-    const {events = []} = userSnap.data();
-
-    // Filtrar eventos que estén dentro de la ventana [ahora, ahora+17min]
-    const upcoming = events.filter((ev) => {
+    // ── EVENTOS ────────────────────────────────────────────────────────────
+    const upcomingEvents = events.filter((ev) => {
       if (!ev.date || !ev.start) return false;
-
-      // Normalizar start a HH:MM (ej: "9:00" → "09:00")
-      const parts = String(ev.start).split(":");
-      if (parts.length < 2) return false;
-      const start = parts[0].padStart(2, "0") + ":" + parts[1].padStart(2, "0");
-
-      // El evento tiene que ser hoy (o mañana si la ventana cruza medianoche)
-      const eventDateOk = ev.date === todayStr || ev.date === cutoffDateStr;
-      if (!eventDateOk) return false;
-
-      // Comparar como strings HH:MM (funciona porque el formato es fijo)
-      // Caso normal: evento hoy, entre nowTime y cutoffTime
-      if (ev.date === todayStr && ev.date === cutoffDateStr) {
-        return start >= nowTimeStr && start <= cutoffTimeStr;
+      const start = normalizeTime(ev.start);
+      if (!start) return false;
+      // Caso normal (mismo día) o cruce de medianoche
+      if (ev.date === dateStart && ev.date === dateEnd) {
+        return start >= timeStart && start <= timeEnd;
       }
-      // Caso cruce de medianoche: hoy >= nowTime, o mañana <= cutoffTime
-      if (ev.date === todayStr) return start >= nowTimeStr;
-      if (ev.date === cutoffDateStr) return start <= cutoffTimeStr;
+      if (ev.date === dateStart) return start >= timeStart;
+      if (ev.date === dateEnd)   return start <= timeEnd;
       return false;
     });
 
-    if (upcoming.length === 0) continue;
-    console.log(`uid=${uid}: ${upcoming.length} evento(s) en ventana`);
+    for (const ev of upcomingEvents) {
+      const key = `ev_${uid}_${ev.id}_${ev.date}`;
+      const shouldSend = await claimNotif(key);
+      if (!shouldSend) { console.log(`Skip dedup: ${key}`); continue; }
 
-    for (const ev of upcoming) {
-      // Calcular minutos reales hasta el evento para el mensaje
-      const parts = String(ev.start).split(":");
-      const evMs = new Date(
-          `${ev.date}T${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}:00`
-      ).getTime() + 3 * 60 * 60 * 1000; // convertir a UTC sumando 3h (ARG→UTC)
-      const minsLeft = Math.round((evMs - now.getTime()) / 60000);
-      const minsText = minsLeft <= 1 ? "ahora mismo" :
-        minsLeft < 60 ? `en ${minsLeft} minutos` :
-        `a las ${ev.start}`;
+      const ok = await sendNotif(token, uid, {
+        title: `📅 ${ev.title}`,
+        body: `Empieza en 15 minutos — ${ev.start}`,
+        data: {eventId: String(ev.id), type: "event"},
+      });
+      if (!ok) break; // token inválido, saltar al próximo usuario
+    }
 
-      // Deduplicar: usar un documento en Firestore para registrar notifs enviadas
-      // Clave: uid_eventId_fecha — expira automáticamente porque solo se consulta el día actual
-      const dedupKey = `${uid}_${ev.id}_${ev.date}`;
-      const dedupRef = db.collection("notif_sent").doc(dedupKey);
-      const dedupSnap = await dedupRef.get();
+    // ── TAREAS con fecha de vencimiento ────────────────────────────────────
+    // Notificar tareas pendientes que vencen HOY a las 08:00 ARG
+    // (se detecta porque winStart puede caer en esa hora)
+    const {dateStr: todayArg, timeStr: nowTimeArg} = argTime(now);
+    const isEarlyMorning = nowTimeArg >= "07:55" && nowTimeArg <= "08:05";
 
-      if (dedupSnap.exists) {
-        console.log(`Ya notificado: "${ev.title}" (${dedupKey})`);
-        continue;
-      }
+    if (isEarlyMorning) {
+      const dueTasks = tasks.filter((t) =>
+        t.dueDate === todayArg &&
+        t.status !== "completada" &&
+        t.status !== "done"
+      );
 
-      try {
-        await getMessaging().send({
-          token,
-          notification: {
-            title: `📅 ${ev.title}`,
-            body: `Empieza ${minsText} — ${ev.start}`,
-          },
-          webpush: {
-            fcmOptions: {
-              link: "https://malenasein.github.io/organizador/",
-            },
-            notification: {
-              icon: "https://malenasein.github.io/organizador/icons/icon-192.png",
-              badge: "https://malenasein.github.io/organizador/icons/icon-192.png",
-            },
-          },
-          data: {eventId: String(ev.id)},
+      for (const task of dueTasks) {
+        const key = `task_${uid}_${task.id}_${task.dueDate}`;
+        const shouldSend = await claimNotif(key);
+        if (!shouldSend) { console.log(`Skip dedup task: ${key}`); continue; }
+
+        await sendNotif(token, uid, {
+          title: `✅ Tarea vence hoy`,
+          body: `"${task.title}" — Prioridad ${task.priority || "normal"}`,
+          data: {taskId: String(task.id), type: "task"},
         });
-
-        // Marcar como enviado con TTL de 24h (se limpia con una función de limpieza o TTL de Firestore)
-        await dedupRef.set({
-          sentAt: now.toISOString(),
-          title: ev.title,
-          uid,
-        });
-
-        console.log(`✅ Enviada: "${ev.title}" uid=${uid} (${minsLeft} min)`);
-      } catch (err) {
-        console.error(`❌ Error uid=${uid}: ${err.message}`);
-        if (err.code === "messaging/registration-token-not-registered") {
-          await db.collection("fcm_tokens").doc(uid).delete();
-          console.log(`Token eliminado para uid=${uid}`);
-          break; // no seguir con otros eventos de este usuario
-        }
       }
     }
   }
 });
 
-// Limpiar registros de deduplicación viejos (corre 1 vez por día a las 3 AM ARG = 6 UTC)
+// ─── LIMPIEZA DIARIA ──────────────────────────────────────────────────────────
+// Borra registros de deduplicación de más de 24h — corre a las 3 AM ARG (6 UTC)
 exports.cleanupNotifSent = onSchedule("0 6 * * *", async () => {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const snap = await db.collection("notif_sent").where("sentAt", "<", cutoff).get();
+  const snap = await db.collection("notif_sent")
+      .where("sentAt", "<", cutoff)
+      .get();
+
+  if (snap.empty) { console.log("Nada que limpiar"); return; }
+
   const batch = db.batch();
   snap.docs.forEach((doc) => batch.delete(doc.ref));
   await batch.commit();
-  console.log(`Limpieza: ${snap.size} registros eliminados`);
+  console.log(`🗑 Limpieza: ${snap.size} registros eliminados`);
 });
