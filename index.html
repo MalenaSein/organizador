@@ -6,9 +6,11 @@
 <meta name="theme-color" content="#0f0f13"/>
 <meta name="description" content="Organizador Personal y Académico"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Organizador"/>
 <title>Organizador Personal</title>
+<link rel="manifest" href="manifest.json"/>
 <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAw0lEQVR42mNkQAI1Wd//M9ABtEzjZISxmehtObpdTPS2HN0RjKRafv/pXYJqFKWViTaPidqWk6KOZAfQAgy4A1hwSTRP5cAiqs0QE3CVoKFLNmhjFa/N/oEhhjURYrecOgDdEaNpYNQBLMQq3LjyG8mG+4dzUScEyLGcWH1M1PIJTUNgwBPhsI4CFmoFJbmOpFoUkBtNVIsCckOAhdZBPFoXjDpg1AEEHYDcUaQ3aJnGyciE3lvF1XymdosYZifjQHfPAc0gSYrXGrX5AAAAAElFTkSuQmCC">
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
@@ -463,8 +465,10 @@ const NotifManager = {
  
     try {
       // 2. Registrar Service Worker
-      const reg = await navigator.serviceWorker.register('/organizador/service-worker.js', {
-        scope: '/organizador/'
+      // Detectar base path: local = '/', GitHub Pages = '/organizador/'
+      const swBase = location.pathname.startsWith('/organizador') ? '/organizador/' : '/';
+      const reg = await navigator.serviceWorker.register(swBase + 'service-worker.js', {
+        scope: swBase
       });
       await navigator.serviceWorker.ready;
  

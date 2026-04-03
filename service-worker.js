@@ -12,12 +12,15 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Detectar base path dinámicamente
+const BASE = self.registration.scope; // ej: 'http://localhost:3000/' o 'https://...github.io/organizador/'
+
 messaging.onBackgroundMessage(payload => {
   const { title, body } = payload.notification || {};
   self.registration.showNotification(title || '📅 Recordatorio', {
     body: body || 'Tenés un evento próximo.',
-    icon: '/organizador/icons/icon-192.png',
-    badge: '/organizador/icons/icon-192.png',
+    icon: BASE + 'icons/icon-192.png',
+    badge: BASE + 'icons/icon-192.png',
     tag: 'organizador-notif',
     renotify: true,
     actions: [
@@ -35,17 +38,16 @@ self.addEventListener('notificationclick', e => {
       for (const client of windowClients) {
         if ('focus' in client) return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow('/organizador/');
+      if (clients.openWindow) return clients.openWindow(BASE);
     })
   );
 });
 
-const CACHE = 'organizador-v5';
-// Rutas relativas al scope del SW — con GitHub Pages vive en /organizador/
+const CACHE = 'organizador-v6';
 const ASSETS = [
-  '/organizador/',
-  '/organizador/index.html',
-  '/organizador/manifest.json',
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
 ];
 
 self.addEventListener('install', e => {
@@ -53,7 +55,7 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
       .then(c => c.addAll(ASSETS))
-      .catch(() => {}) // no bloquear si algo falla
+      .catch(() => {})
   );
 });
 
@@ -71,8 +73,8 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
 
-  // Para la página principal, intentar red primero y caché como fallback
-  if (url.pathname === '/organizador/' || url.pathname === '/organizador/index.html') {
+  // Página principal: red primero, caché como fallback
+  if (url.href === BASE || url.pathname === new URL(BASE).pathname + 'index.html') {
     e.respondWith(
       fetch(e.request)
         .then(res => {
@@ -84,7 +86,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Para el resto: caché primero, luego red
+  // Resto: caché primero, luego red
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
