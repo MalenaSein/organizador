@@ -466,16 +466,22 @@ const NotifManager = {
     if (perm !== 'granted') return perm;
  
     try {
-      // 2. Registrar Service Worker
-      const reg = await navigator.serviceWorker.register('/organizador/service-worker.js', {
-        scope: '/organizador/'
-      });
+      // 2. Usar el SW ya registrado (o registrarlo si no existe)
+      let reg;
+      const existingReg = await navigator.serviceWorker.getRegistration('/organizador/');
+      if (existingReg) {
+        reg = existingReg;
+      } else {
+        reg = await navigator.serviceWorker.register('/organizador/service-worker.js', {
+          scope: '/organizador/'
+        });
+      }
       await navigator.serviceWorker.ready;
  
       // 3. Inicializar messaging COMPAT (no import dinámico)
       this._messaging = firebase.messaging();
  
-      // 4. Obtener token FCM
+      // 4. Obtener token FCM con el SW correcto
       const token = await this._messaging.getToken({
         vapidKey: VAPID_KEY,
         serviceWorkerRegistration: reg,
@@ -2476,16 +2482,44 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 </script>
 
 <script>
-// Registrar el Service Worker de forma independiente para habilitar la PWA
+// Registrar el Service Worker siempre (necesario para PWA install prompt)
+// Si el usuario ya tiene notificaciones concedidas, renovar el token FCM automáticamente
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/organizador/service-worker.js', {
-      scope: '/organizador/'
-    }).then(reg => {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/organizador/service-worker.js', {
+        scope: '/organizador/'
+      });
       console.log('\u2705 SW registrado:', reg.scope);
-    }).catch(err => {
+
+      // Si ya tiene permiso de notificaciones, actualizar token FCM silenciosamente
+      if (Notification.permission === 'granted') {
+        await navigator.serviceWorker.ready;
+        try {
+          const messaging = firebase.messaging();
+          const token = await messaging.getToken({
+            vapidKey: 'BANAZ9KM1TP22IPTDM6fdv9_KhoaFwbLsQIFnhtEc2kJ91Wz6FIGGfnXxImbkj3C10yCw_E8kxPuOAktCsOW358',
+            serviceWorkerRegistration: reg,
+          });
+          if (token) {
+            // Guardar token en Firestore si el usuario está autenticado
+            firebase.auth().onAuthStateChanged(async (user) => {
+              if (user && token) {
+                await firebase.firestore().collection('fcm_tokens').doc(user.uid).set({
+                  token: token,
+                  updatedAt: new Date().toISOString(),
+                });
+                console.log('\u2705 Token FCM renovado al cargar');
+              }
+            });
+          }
+        } catch(e) {
+          console.warn('No se pudo renovar token FCM:', e.message);
+        }
+      }
+    } catch(err) {
       console.warn('SW no pudo registrarse:', err);
-    });
+    }
   });
 }
 </script>

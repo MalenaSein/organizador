@@ -43,11 +43,13 @@ self.addEventListener('notificationclick', e => {
   );
 });
 
-const CACHE = 'organizador-v6';
+const CACHE = 'organizador-v7';
 const ASSETS = [
   BASE,
   BASE + 'index.html',
   BASE + 'manifest.json',
+  BASE + 'icons/icon-192.png',
+  BASE + 'icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
