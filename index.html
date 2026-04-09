@@ -1719,7 +1719,7 @@ function Tasks({state,setState,showToast}) {
 function Habits({state,setState,showToast}) {
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
-  const [form,setForm]=useState({name:'',icon:'⭐'});
+  const [form,setForm]=useState({name:'',icon:'⭐',targetDays:[]});
   const [activeTab,setActiveTab]=useState('semana');
   const currentWeek=getWeekKey(new Date());
 
@@ -1730,27 +1730,49 @@ function Habits({state,setState,showToast}) {
     setState(s=>({...s,habits:s.habits.map(h=>{
       if((h.lastWeek||'')===currentWeek) return h;
       const hist=h.history||[];
-      if((h.lastWeek||'')&&h.done&&h.done.length>0) hist.push({week:h.lastWeek,done:h.done.length,total:7});
-      return {...h,done:[],lastWeek:currentWeek,streak:h.done&&h.done.length>=5?(h.streak||0):0,history:hist.slice(-12)};
+      const targetTotal=h.targetDays&&h.targetDays.length>0?h.targetDays.length:7;
+      if((h.lastWeek||'')&&h.done&&h.done.length>0) hist.push({week:h.lastWeek,done:h.done.length,total:targetTotal});
+      const streakOk=h.done&&h.done.length>=Math.ceil(targetTotal*0.7);
+      return {...h,done:[],lastWeek:currentWeek,streak:streakOk?(h.streak||0):0,history:hist.slice(-12)};
     })}));
   },[]);
 
-  const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{if(h.id!==hid)return h;const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];return {...h,done,streak:done.length};})}));
-  const openNew=()=>{setEditing(null);setForm({name:'',icon:'⭐'});setModal(true);};
-  const openEdit=h=>{setEditing(h);setForm({name:h.name,icon:h.icon});setModal(true);};
+  const toggle=(hid,i)=>setState(s=>({...s,habits:s.habits.map(h=>{
+    if(h.id!==hid)return h;
+    const done=h.done.includes(i)?h.done.filter(d=>d!==i):[...h.done,i];
+    return {...h,done,streak:done.length};
+  })}));
+
+  const openNew=()=>{setEditing(null);setForm({name:'',icon:'⭐',targetDays:[]});setModal(true);};
+  const openEdit=h=>{setEditing(h);setForm({name:h.name,icon:h.icon,targetDays:h.targetDays||[]});setModal(true);};
+
   const save=()=>{
     if(!form.name.trim()) return;
-    if(editing){setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon}:h)}));showToast('Hábito actualizado');}
-    else{setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,history:[]}]}));showToast('Hábito agregado');}
-    setModal(false);setEditing(null);setForm({name:'',icon:'⭐'});
+    if(editing){
+      setState(s=>({...s,habits:s.habits.map(h=>h.id===editing.id?{...h,name:form.name,icon:form.icon,targetDays:form.targetDays||[]}:h)}));
+      showToast('Hábito actualizado');
+    } else {
+      setState(s=>({...s,habits:[...s.habits,{...form,id:Date.now(),done:[],streak:0,history:[],targetDays:form.targetDays||[]}]}));
+      showToast('Hábito agregado');
+    }
+    setModal(false);setEditing(null);setForm({name:'',icon:'⭐',targetDays:[]});
   };
+
   const del=id=>{setState(s=>({...s,habits:s.habits.filter(h=>h.id!==id)}));showToast('Hábito eliminado');};
 
-  const totH=state.habits.length*7,doneH=state.habits.reduce((a,h)=>a+h.done.length,0);
+  // Progreso global: cada hábito pesa según sus días objetivo
+  const totH=state.habits.reduce((a,h)=>{
+    const td=h.targetDays&&h.targetDays.length>0?h.targetDays.length:7;
+    return a+td;
+  },0);
+  const doneH=state.habits.reduce((a,h)=>a+h.done.length,0);
   const wPct=Math.round(doneH/Math.max(totH,1)*100);
 
   const weekKeys=useMemo(()=>{const keys=new Set([currentWeek]);state.habits.forEach(h=>(h.history||[]).forEach(e=>keys.add(e.week)));return [...keys].sort().reverse().slice(0,8);},[state.habits]);
   const fmtWeek=(wk)=>{if(!wk)return'';const[yr,wn]=wk.split('-W');return`Sem ${wn} / ${yr}`;};
+
+  // Mapeo DS → índice para saber si un día es objetivo
+  const DS_LABELS=['L','M','X','J','V','S','D'];
 
   return React.createElement('div',null,
     React.createElement('div',{className:'page-header'},
@@ -1760,6 +1782,7 @@ function Habits({state,setState,showToast}) {
     React.createElement('div',{className:'tabs',style:{marginBottom:20,maxWidth:320}},
       [['semana','Esta Semana'],['historial','Historial']].map(([v,l])=>React.createElement('button',{key:v,className:`tab${activeTab===v?' active':''}`,onClick:()=>setActiveTab(v)},l))
     ),
+
     activeTab==='semana'&&React.createElement('div',null,
       React.createElement('div',{className:'card',style:{marginBottom:20}},
         React.createElement('div',{className:'card-title'},'Progreso Semanal'),
@@ -1772,31 +1795,72 @@ function Habits({state,setState,showToast}) {
         )
       ),
       state.habits.length===0&&React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Empezá con un hábito pequeño.'),
-      state.habits.map(h=>React.createElement('div',{key:h.id,className:'habit-item',style:{flexDirection:'column',alignItems:'stretch',gap:10}},
-        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
-          React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer',flexShrink:0},onClick:()=>openEdit(h)},h.icon||'⭐'),
-          React.createElement('div',{style:{flex:1,cursor:'pointer',minWidth:0},onClick:()=>openEdit(h)},
-            React.createElement('div',{style:{fontSize:14,fontWeight:600}},h.name),
-            React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},h.streak,' días 🔥')
+
+      state.habits.map(h=>{
+        const targetDays=h.targetDays&&h.targetDays.length>0?h.targetDays:null;
+        const totalTarget=targetDays?targetDays.length:7;
+        const pct=Math.round(h.done.length/totalTarget*100);
+        const pctColor=pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)';
+
+        return React.createElement('div',{key:h.id,className:'habit-item',style:{flexDirection:'column',alignItems:'stretch',gap:10}},
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
+            React.createElement('div',{style:{fontSize:22,width:32,textAlign:'center',cursor:'pointer',flexShrink:0},onClick:()=>openEdit(h)},h.icon||'⭐'),
+            React.createElement('div',{style:{flex:1,cursor:'pointer',minWidth:0},onClick:()=>openEdit(h)},
+              React.createElement('div',{style:{fontSize:14,fontWeight:600}},h.name),
+              React.createElement('div',{style:{fontSize:12,color:'var(--text3)'}},
+                h.streak,' 🔥 · ',
+                React.createElement('span',{style:{color:pctColor,fontWeight:700}},h.done.length,'/',totalTarget,' días'),
+                targetDays&&React.createElement('span',{style:{color:'var(--text3)'}},' ('+targetDays.join(',')+')'),
+              )
+            ),
+            React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
+              React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
+              React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+            )
           ),
-          React.createElement('div',{style:{display:'flex',gap:4,flexShrink:0}},
-            React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>openEdit(h)},React.createElement(Icon,{name:'edit',size:12})),
-            React.createElement('button',{className:'btn btn-ghost btn-icon btn-sm',style:{color:'var(--text3)'},onClick:()=>del(h.id)},React.createElement(Icon,{name:'trash',size:12}))
+
+          // Dots de los 7 días — los que no son objetivo quedan opacos y no se pueden clickear
+          React.createElement('div',{style:{display:'flex',gap:4}},
+            DS_LABELS.map((label,i)=>{
+              const isTarget=!targetDays||targetDays.includes(label);
+              const isDone=h.done.includes(i);
+              return React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:28,flexShrink:0}},
+                React.createElement('div',{style:{
+                  fontSize:9,fontWeight:700,
+                  color:isDone?'var(--green)':isTarget?'var(--text3)':'var(--text3)',
+                  opacity:isTarget?1:0.3
+                }},label),
+                React.createElement('div',{
+                  className:`habit-dot${isDone?' done':''}`,
+                  onClick:isTarget?()=>toggle(h.id,i):undefined,
+                  style:{
+                    opacity:isTarget?1:0.2,
+                    cursor:isTarget?'pointer':'default',
+                    fontSize:isTarget?undefined:11,
+                    color:isTarget?undefined:'var(--text3)',
+                  }
+                },isDone?'✓':(!isTarget?'—':''))
+              );
+            })
+          ),
+
+          // Barra de progreso individual
+          React.createElement('div',{className:'progress-bar',style:{height:4}},
+            React.createElement('div',{className:'progress-fill',style:{width:Math.min(pct,100)+'%',background:pctColor}})
           )
-        ),
-        React.createElement('div',{style:{display:'flex',gap:4}},
-          DS.map((label,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3,width:28,flexShrink:0}},
-            React.createElement('div',{style:{fontSize:9,fontWeight:700,color:h.done.includes(i)?'var(--green)':'var(--text3)'}},label),
-            React.createElement('div',{className:`habit-dot${h.done.includes(i)?' done':''}`,onClick:()=>toggle(h.id,i)},h.done.includes(i)?'✓':'')
-          ))
-        )
-      ))
+        );
+      })
     ),
+
     activeTab==='historial'&&React.createElement('div',null,
       state.habits.length===0
         ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},'Sin hábitos cargados.')
         : weekKeys.length<=1&&state.habits.every(h=>!(h.history&&h.history.length>0))
-          ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},React.createElement('div',{style:{fontSize:32,marginBottom:12}},'📅'),React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'El historial se acumula con el tiempo'),React.createElement('div',{style:{fontSize:13}},'Cada semana se guarda tu progreso aquí.'))
+          ? React.createElement('div',{className:'card',style:{textAlign:'center',padding:40,color:'var(--text3)'}},
+              React.createElement('div',{style:{fontSize:32,marginBottom:12}},'📅'),
+              React.createElement('div',{style:{fontWeight:600,marginBottom:6}},'El historial se acumula con el tiempo'),
+              React.createElement('div',{style:{fontSize:13}},'Cada semana se guarda tu progreso aquí.')
+            )
           : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:12}},
               weekKeys.map(wk=>React.createElement('div',{key:wk,className:'card',style:{padding:20}},
                 React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}},
@@ -1804,25 +1868,45 @@ function Habits({state,setState,showToast}) {
                   wk===currentWeek&&React.createElement('div',{style:{fontSize:11,color:'var(--accent)',fontWeight:700,background:'var(--accent-glow)',padding:'2px 8px',borderRadius:10}},'Esta semana')
                 ),
                 state.habits.map(h=>{
+                  const targetTotal=h.targetDays&&h.targetDays.length>0?h.targetDays.length:7;
                   let doneCount=wk===currentWeek?h.done.length:null;
                   if(doneCount===null){const e=(h.history||[]).find(e=>e.week===wk);doneCount=e?e.done:null;}
                   if(doneCount===null) return null;
-                  const pct=Math.round(doneCount/7*100);
+                  const pct=Math.round(doneCount/targetTotal*100);
                   return React.createElement('div',{key:h.id,style:{marginBottom:10}},
                     React.createElement('div',{className:'flex justify-between',style:{marginBottom:5}},
                       React.createElement('span',{style:{fontSize:13,display:'flex',alignItems:'center',gap:6}},h.icon||'⭐',' ',h.name),
-                      React.createElement('span',{style:{fontSize:12,color:pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)',fontWeight:700}},doneCount,'/7')
+                      React.createElement('span',{style:{fontSize:12,color:pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)',fontWeight:700}},doneCount,'/',targetTotal)
                     ),
-                    React.createElement('div',{className:'progress-bar',style:{height:5}},React.createElement('div',{className:'progress-fill',style:{width:pct+'%',background:pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)'}}))
+                    React.createElement('div',{className:'progress-bar',style:{height:5}},
+                      React.createElement('div',{className:'progress-fill',style:{width:Math.min(pct,100)+'%',background:pct>=70?'var(--green)':pct>=40?'var(--yellow)':'var(--red)'}})
+                    )
                   );
                 }).filter(Boolean)
               ))
             )
     ),
+
     modal&&React.createElement(Modal,{title:editing?'Editar Hábito':'Nuevo Hábito',onClose:()=>setModal(false)},
       React.createElement('div',{className:'flex flex-col gap-3'},
         React.createElement(IconPicker,{value:form.icon,onChange:ic=>setForm(f=>({...f,icon:ic})),icons:EMOJI_ICONS_HABITS,label:'Ícono'}),
-        React.createElement('div',{className:'form-group'},React.createElement('label',{className:'label'},'Nombre'),React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Nombre'),
+          React.createElement('input',{className:'input',placeholder:'Ej: Tomar agua',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value}))})
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'label'},'Días objetivo'),
+          React.createElement(DayToggle,{
+            options:['L','M','X','J','V','S','D'],
+            value:form.targetDays||[],
+            onChange:v=>setForm(f=>({...f,targetDays:v}))
+          }),
+          React.createElement('div',{style:{fontSize:11,color:'var(--text3)',marginTop:6}},
+            form.targetDays&&form.targetDays.length>0
+              ? `Objetivo: ${form.targetDays.length} día${form.targetDays.length!==1?'s':''} por semana`
+              : 'Sin selección = todos los días'
+          )
+        ),
         React.createElement('div',{className:'flex gap-2',style:{marginTop:4}},
           React.createElement('button',{className:'btn btn-primary',style:{flex:1,justifyContent:'center'},onClick:save},'Guardar'),
           editing&&React.createElement('button',{className:'btn btn-danger',onClick:()=>{del(editing.id);setModal(false);}},React.createElement(Icon,{name:'trash',size:16}))
